@@ -48,6 +48,29 @@ public class RideRequestService {
         return RideRequestResponse.of(request, partyId);
     }
 
+    /**
+     * 대기 신청 취소 (API-21). 매칭 대기 중 "등록 취소"를 누를 때.
+     * - WAITING → CANCELLED
+     * - 이미 CANCELLED 면 같은 응답(버튼을 두 번 눌러도 문제없게)
+     * - MATCHED 면 409 REQUEST_ALREADY_MATCHED: 이미 팟에 배정됐으니 팟 거절·이탈로 처리해야 한다
+     * - FAILED·EXPIRED 면 409 INVALID_STATE: 이미 끝난 신청
+     * 매칭 작업과 동시에 바뀌지 않도록 신청을 잠근 뒤 확인한다.
+     */
+    @Transactional
+    public RideRequestResponse cancelMyRideRequest(Long userId, Long requestId) {
+        RideRequest request = rideRequestRepository.findByIdForUpdate(requestId)
+                .filter(r -> isOwnedBy(r, userId))
+                .orElseThrow(() -> new OwllyException(ErrorCode.RESOURCE_NOT_FOUND));
+
+        switch (request.getStatus()) {
+            case WAITING -> request.cancel();
+            case CANCELLED -> { /* 이미 취소됨: 그대로 같은 응답 */ }
+            case MATCHED -> throw new OwllyException(ErrorCode.REQUEST_ALREADY_MATCHED);
+            case FAILED, EXPIRED -> throw new OwllyException(ErrorCode.INVALID_STATE);
+        }
+        return RideRequestResponse.of(request, null);
+    }
+
     /** 신청 → 귀가 → 학생으로 이어서 본인 것인지 확인한다(신청에는 학생 id 가 없다). */
     private boolean isOwnedBy(RideRequest request, Long userId) {
         return journeyRepository.findById(request.getJourneyId())

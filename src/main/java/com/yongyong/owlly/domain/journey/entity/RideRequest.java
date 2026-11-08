@@ -80,4 +80,12 @@ public class RideRequest extends BaseTimeEntity {
     /** 결과 안내 마감. 산정식 미확정. */
     @Column(name = "result_due_at")
     private Instant resultDueAt;
+
+    /**
+     * 매칭 대기 중인 신청을 취소한다(WAITING → CANCELLED).
+     * 예) 매칭 대기 중 학생이 "등록 취소"를 누를 때. 취소할 수 있는 상태인지는 서비스에서 먼저 확인한다.
+     */
+    public void cancel() {
+        this.status = RideRequestStatus.CANCELLED;
+    }
 }
