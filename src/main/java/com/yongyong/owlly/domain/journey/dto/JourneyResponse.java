@@ -14,11 +14,11 @@ import java.time.Instant;
  * ID 는 Long 이지만 JacksonConfig 에 의해 JSON 에서는 문자열로 나간다.
  */
 public record JourneyResponse(
-        Long id,
+        Long id,                    // 귀가 번호
         Long universityId,          // 귀가를 만들 당시 학교
         Long pickupPointId,         // 출발 거점
         Long destinationDongId,     // 하차 행정동
-        Instant intendedDepartureAt,
+        Instant intendedDepartureAt, // 귀가 예정 시각(최근 귀가 순 정렬 기준)
         JourneyOutcome outcome,     // UNRESOLVED(아직 결과 전) / POOL_BOARDED / BUS_SELECTED / SOLO_SELECTED / CANCELLED
         Instant outcomeAt,          // 결과가 정해진 시각. 아직이면 null
         OutcomeSource outcomeSource, // 결과 근거(학생 선택 / 탑승 확인). 아직이면 null
