@@ -12,9 +12,9 @@ import com.yongyong.owlly.domain.region.entity.PickupPoint;
  * id·universityId 는 Long 이지만 JacksonConfig 에 의해 JSON 에서는 문자열로 나간다.
  */
 public record PickupPointResponse(
-        Long id,
+        Long id,             // 거점 번호. 귀가 생성·동승 신청 때 출발 거점으로 보낸다
         Long universityId,   // 학교 전용이면 그 학교 번호, 여러 학교가 같이 쓰는 공용 거점이면 null
-        String name,
+        String name,         // 목록에 보이는 거점 이름. 예) "단국대 정문 거점"
         Point point,         // 지도에 표시할 공개 집결 좌표
         String meetingNote   // "정문 앞 큰길 쪽" 같은 집결 위치 안내
 ) {
