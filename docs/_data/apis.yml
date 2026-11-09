@@ -420,7 +420,8 @@ sections:
         method: PUT
         path: /rooms/{id}/accounts/{purpose}
         desc: 내 선송금·환급 수취 계좌 등록
-        status: 시작 전
+        status: 대기
+        waitingFor: 인증
         auth: 본인 계좌의 팟 참여자 (ACCOUNT_OWNER) · Idempotency-Key 필수
         success: "200 · data = MaskedAccount"
         req: |
@@ -435,7 +436,8 @@ sections:
         method: GET
         path: /transfers/{id}/recipient-account
         desc: 송금할 수취 계좌 조회
-        status: 시작 전
+        status: 대기
+        waitingFor: 인증
         auth: 해당 이체의 송금자 (TRANSFER_PAYER)
         success: "200 · data = RecipientAccount (Cache-Control no-store)"
         req: 없음

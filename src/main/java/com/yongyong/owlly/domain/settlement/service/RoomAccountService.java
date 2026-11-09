@@ -1,11 +1,16 @@
 package com.yongyong.owlly.domain.settlement.service;
 
 import com.yongyong.owlly.common.crypto.TextCryptor;
+import com.yongyong.owlly.common.exception.ErrorCode;
+import com.yongyong.owlly.common.exception.OwllyException;
 import com.yongyong.owlly.domain.settlement.dto.AccountInput;
 import com.yongyong.owlly.domain.settlement.dto.MaskedAccount;
+import com.yongyong.owlly.domain.settlement.dto.RecipientAccount;
 import com.yongyong.owlly.domain.settlement.entity.AccountPurpose;
 import com.yongyong.owlly.domain.settlement.entity.RoomAccount;
+import com.yongyong.owlly.domain.settlement.entity.Transfer;
 import com.yongyong.owlly.domain.settlement.repository.RoomAccountRepository;
+import com.yongyong.owlly.domain.settlement.repository.TransferRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class RoomAccountService {
 
     private final RoomAccountRepository roomAccountRepository;
+    private final TransferRepository transferRepository;
     private final TextCryptor textCryptor;
 
     /**
@@ -73,5 +79,39 @@ public class RoomAccountService {
 
         // 4) 응답은 마스킹 (원문은 가린 뒤에만 사용)
         return MaskedAccount.of(account, accountNumber, holderName);
+    }
+
+    /**
+     * 송금할 수취 계좌를 조회한다 (API-32). 해당 이체의 송금자에게만 계좌번호 원문을 준다.
+     *
+     * <ul>
+     *   <li>송금자 본인이 아니거나 없는 이체면 404 (남의 이체 존재 여부를 숨긴다).</li>
+     *   <li>수취 계좌가 아직 연결 안 됐으면 409 ACCOUNT_NOT_REGISTERED.</li>
+     *   <li>방 종료·계좌 삭제로 계좌가 사라졌으면 410 ACCOUNT_EXPIRED.</li>
+     * </ul>
+     *
+     * <p>계좌번호는 복호화한 원문, 예금주는 마스킹해서 돌려준다.
+     * TODO(인증 후): payerMemberId 를 세션에서 채운다. 응답 헤더에 Cache-Control: no-store 적용(Controller).
+     *
+     * @param payerMemberId 송금자(팟 참여) ID — 인증 연결 전까지는 호출자가 넘겨준다
+     * @param transferId    대상 이체 ID
+     */
+    public RecipientAccount getRecipientAccount(Long payerMemberId, Long transferId) {
+        Transfer transfer = transferRepository.findById(transferId)
+                .filter(t -> t.getPayerMemberId().equals(payerMemberId))
+                .orElseThrow(() -> new OwllyException(ErrorCode.RESOURCE_NOT_FOUND));
+
+        Long accountId = transfer.getReceiverAccountId();
+        if (accountId == null) {
+            throw new OwllyException(ErrorCode.ACCOUNT_NOT_REGISTERED);
+        }
+
+        RoomAccount account = roomAccountRepository.findById(accountId)
+                .orElseThrow(() -> new OwllyException(ErrorCode.ACCOUNT_EXPIRED));
+
+        // 저장된 암호문을 풀어 원문으로. 계좌번호는 원문 제공, 예금주는 마스킹.
+        String accountNumber = textCryptor.decrypt(account.getAccountNumberEncrypted());
+        String holderName = textCryptor.decrypt(account.getHolderNameEncrypted());
+        return RecipientAccount.of(account, accountNumber, holderName);
     }
 }

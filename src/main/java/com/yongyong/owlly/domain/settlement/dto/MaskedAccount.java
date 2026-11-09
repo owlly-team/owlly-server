@@ -1,5 +1,6 @@
 package com.yongyong.owlly.domain.settlement.dto;
 
+import com.yongyong.owlly.common.util.Masking;
 import com.yongyong.owlly.domain.settlement.entity.RoomAccount;
 import java.time.Instant;
 
@@ -24,30 +25,8 @@ public record MaskedAccount(
                 account.getId(),
                 account.getPurpose().name(),
                 account.getBankCode(),
-                maskAccountNumber(plainAccountNumber),
-                maskHolderName(plainHolderName),
+                Masking.accountNumber(plainAccountNumber),
+                Masking.holderName(plainHolderName),
                 account.getDeleteAfter());
-    }
-
-    /** 계좌번호: 하이픈·공백을 뺀 뒤 앞 3자리·뒤 4자리만 남기고 가운데를 * 로. */
-    private static String maskAccountNumber(String raw) {
-        String digits = raw.replaceAll("[^0-9]", "");
-        if (digits.length() <= 7) {
-            return "*".repeat(digits.length());
-        }
-        String head = digits.substring(0, 3);
-        String tail = digits.substring(digits.length() - 4);
-        return head + "*".repeat(digits.length() - 7) + tail;
-    }
-
-    /** 예금주: 가운데 글자를 * 로. 2글자면 뒷글자만 가린다. */
-    private static String maskHolderName(String name) {
-        if (name.length() <= 1) {
-            return name;
-        }
-        if (name.length() == 2) {
-            return name.charAt(0) + "*";
-        }
-        return name.charAt(0) + "*".repeat(name.length() - 2) + name.charAt(name.length() - 1);
     }
 }
