@@ -144,20 +144,9 @@ sections:
         req: 없음
         errors: []
 
-  - name: 프로필·귀가
-    owner: 박기범
+  - name: 프로필
+    owner: 강나연
     items:
-      - id: API-04
-        method: GET
-        path: /pickup-points
-        desc: 고정 출발 거점 목록
-        status: 완료
-        auth: 학생 (STUDENT)
-        success: "200 · data = PickupPoint[]"
-        req: |
-          Query 파라미터
-          universityId (string, 선택) — 학교 거점 필터, 공용 거점 포함
-        errors: []
       - id: API-12
         method: GET
         path: /me/profile
@@ -181,6 +170,21 @@ sections:
             "defaultDropoff": { "latitude": 37.33, "longitude": 127.27 }
           }
         errors: ["422 LOCATION_UNRESOLVABLE"]
+
+  - name: 거점·귀가
+    owner: 박기범
+    items:
+      - id: API-04
+        method: GET
+        path: /pickup-points
+        desc: 고정 출발 거점 목록
+        status: 완료
+        auth: 학생 (STUDENT)
+        success: "200 · data = PickupPoint[]"
+        req: |
+          Query 파라미터
+          universityId (string, 선택) — 학교 거점 필터, 공용 거점 포함
+        errors: []
       - id: API-14
         method: POST
         path: /travel-options
