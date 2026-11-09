@@ -1,6 +1,5 @@
 title: Owlly API 진행 현황
 description: 전체 50개 엔드포인트 담당자·진행 현황
-theme: jekyll-theme-cayman
 
 # status 페이지만 공개. 나머지 내부 문서는 Pages 빌드에서 제외(웹 노출 차단)
 exclude:
