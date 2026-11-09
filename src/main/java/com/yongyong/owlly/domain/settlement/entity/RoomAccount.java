@@ -59,4 +59,14 @@ public class RoomAccount extends BaseTimeEntity {
     /** 방 종료 시 삭제 예정. 닫힘 전 NULL. */
     @Column(name = "delete_after")
     private Instant deleteAfter;
+
+    /**
+     * 이미 등록된 계좌를 새 값으로 교체한다(같은 방·멤버·용도의 재등록).
+     * 암호화는 서비스에서 끝낸 값을 받는다(엔티티는 암호화를 모른다).
+     */
+    public void changeAccount(String bankCode, String accountNumberEncrypted, String holderNameEncrypted) {
+        this.bankCode = bankCode;
+        this.accountNumberEncrypted = accountNumberEncrypted;
+        this.holderNameEncrypted = holderNameEncrypted;
+    }
 }
