@@ -1,0 +1,381 @@
+# 응답 DTO 필드 구조(스켈레톤). 값은 타입/enum 표기이며 실제 샘플값이 아닙니다.
+# api.md 5절 정의 기준. DTO는 한 번만 정의하고 여러 API가 공유합니다.
+
+Point:
+  skeleton: |
+    {
+      "latitude": "number",
+      "longitude": "number"
+    }
+University:
+  skeleton: |
+    {
+      "id": "string",
+      "name": "string",
+      "emailDomains": "string[]"
+    }
+ProfileOption:
+  skeleton: |
+    {
+      "code": "string",
+      "label": "string"
+    }
+ProfileOptions:
+  skeleton: |
+    {
+      "genderOptions": "ProfileOption[]",
+      "sameGenderDefault": "boolean"
+    }
+Bank:
+  skeleton: |
+    {
+      "code": "string",
+      "name": "string"
+    }
+PickupPoint:
+  skeleton: |
+    {
+      "id": "string",
+      "universityId": "string | null",
+      "name": "string",
+      "point": "Point",
+      "meetingNote": "string"
+    }
+User:
+  skeleton: |
+    {
+      "id": "string",
+      "universityId": "string",
+      "email": "string",
+      "role": "STUDENT | STAFF",
+      "status": "ACTIVE | SUSPENDED | WITHDRAWN"
+    }
+Session:
+  skeleton: |
+    {
+      "user": "User",
+      "expiresAt": "datetime",
+      "csrfToken": "string"
+    }
+StudentProfile:
+  skeleton: |
+    {
+      "user": "User",
+      "realName": "string",
+      "genderCode": "string",
+      "sameGenderDefault": "boolean",
+      "defaultDongId": "string",
+      "defaultDropoff": "Point"
+    }
+EmailVerification:
+  skeleton: |
+    {
+      "verificationId": "string",
+      "expiresAt": "datetime",
+      "resendAvailableAt": "datetime | null"
+    }
+VerificationGrant:
+  skeleton: |
+    {
+      "verificationToken": "string",
+      "expiresAt": "datetime"
+    }
+TransitLeg:
+  skeleton: |
+    {
+      "mode": "WALK | BUS | SUBWAY",
+      "routeName": "string | null",
+      "fromName": "string",
+      "toName": "string",
+      "departureAt": "datetime",
+      "arrivalAt": "datetime"
+    }
+TransitOption:
+  skeleton: |
+    {
+      "available": "boolean",
+      "lastLeaveAt": "datetime | null",
+      "arrivalAt": "datetime | null",
+      "estimatedCostWon": "integer | null",
+      "legs": "TransitLeg[]",
+      "sourceLabel": "string",
+      "asOf": "datetime"
+    }
+TravelOptions:
+  skeleton: |
+    {
+      "transit": "TransitOption",
+      "soloTaxiEstimatedWon": "integer | null",
+      "poolEstimatedShareWon": "integer | null",
+      "estimatedArrivalAt": "datetime | null",
+      "destinationDongId": "string",
+      "districtId": "string",
+      "asOf": "datetime",
+      "warnings": "string[]"
+    }
+Journey:
+  skeleton: |
+    {
+      "id": "string",
+      "universityId": "string",
+      "pickupPointId": "string",
+      "destinationDongId": "string",
+      "intendedDepartureAt": "datetime",
+      "outcome": "UNRESOLVED | POOL_BOARDED | BUS_SELECTED | SOLO_SELECTED | CANCELLED",
+      "outcomeAt": "datetime | null",
+      "outcomeSource": "string | null",
+      "activeRequestId": "string | null"
+    }
+RideRequest:
+  skeleton: |
+    {
+      "id": "string",
+      "journeyId": "string",
+      "pickupPointId": "string",
+      "districtId": "string",
+      "destinationDongId": "string",
+      "departureAt": "datetime",
+      "sameGenderOnly": "boolean",
+      "status": "WAITING | MATCHED | FAILED | CANCELLED | EXPIRED",
+      "resultDueAt": "datetime | null",
+      "partyId": "string | null",
+      "createdAt": "datetime"
+    }
+MatchingSlot:
+  skeleton: |
+    {
+      "departureAt": "datetime",
+      "waitingCount": "integer",
+      "registrationAllowed": "boolean",
+      "reason": "string | null"
+    }
+PartyMember:
+  skeleton: |
+    {
+      "memberId": "string",
+      "maskedName": "string (예: 김*연)",
+      "universityName": "string",
+      "destinationDongName": "string",
+      "sameGenderAsMe": "boolean",
+      "isRepresentative": "boolean",
+      "decision": "PENDING | ACCEPTED | DECLINED | LEFT | REMOVED_UNPAID",
+      "boardingStatus": "UNKNOWN | BOARDED | MISSED",
+      "stopOrder": "integer | null"
+    }
+Party:
+  skeleton: |
+    {
+      "id": "string",
+      "status": "FORMING | CONFIRMING | PREPAYING | READY | RIDING | SETTLING | COMPLETED | CANCELLED",
+      "pickupPoint": "PickupPoint",
+      "departureAt": "datetime",
+      "representativeMemberId": "string | null",
+      "myMemberId": "string",
+      "members": "PartyMember[]",
+      "routeVersion": "integer",
+      "taxiCalledAt": "datetime | null",
+      "roomId": "string | null",
+      "allowedActions": "string[]"
+    }
+Room:
+  skeleton: |
+    {
+      "id": "string",
+      "partyId": "string",
+      "status": "OPEN | CLOSED",
+      "meetingNote": "string",
+      "departureAt": "datetime",
+      "verificationCode": "string | null",
+      "closedAt": "datetime | null",
+      "deleteAfter": "datetime | null",
+      "canSendMessage": "boolean"
+    }
+Message:
+  skeleton: |
+    {
+      "id": "string",
+      "roomId": "string",
+      "senderMemberId": "string | null",
+      "messageType": "USER | SYSTEM",
+      "body": "string",
+      "createdAt": "datetime"
+    }
+SafetyReport:
+  skeleton: |
+    {
+      "id": "string",
+      "status": "RECEIVED | REVIEWED | DISMISSED",
+      "evidenceDeleteAfter": "datetime",
+      "rematchingBlocked": "boolean"
+    }
+MaskedAccount:
+  skeleton: |
+    {
+      "id": "string",
+      "purpose": "PREPAY_RECEIVE | REFUND_RECEIVE",
+      "bankCode": "string",
+      "maskedAccountNumber": "string",
+      "maskedHolderName": "string",
+      "deleteAfter": "datetime | null"
+    }
+RecipientAccount:
+  skeleton: |
+    {
+      "accountId": "string",
+      "bankCode": "string",
+      "accountNumber": "string (인가된 송금자에게만 원문)",
+      "maskedHolderName": "string",
+      "purpose": "PREPAY_RECEIVE | REFUND_RECEIVE"
+    }
+Transfer:
+  skeleton: |
+    {
+      "id": "string",
+      "settlementItemId": "string",
+      "kind": "PREPAY | REFUND",
+      "payerMemberId": "string",
+      "payeeMemberId": "string",
+      "amountWon": "integer",
+      "status": "PENDING | SENT | RECEIVED | CANCELLED",
+      "sentAt": "datetime | null",
+      "receivedAt": "datetime | null"
+    }
+SettlementItem:
+  skeleton: |
+    {
+      "id": "string",
+      "memberId": "string",
+      "estimatedShareWon": "integer",
+      "prepayDueWon": "integer (대표는 0)",
+      "actualShareWon": "integer | null",
+      "refundDueWon": "integer | null",
+      "status": "ESTIMATED | PREPAID | REFUND_PENDING | COMPLETED | REVIEW_REQUIRED",
+      "transfers": "Transfer[]"
+    }
+Settlement:
+  skeleton: |
+    {
+      "id": "string",
+      "partyId": "string",
+      "estimatedTotalWon": "integer",
+      "actualTotalWon": "integer | null",
+      "routeVersion": "integer",
+      "status": "ESTIMATED | PREPAYING | AWAITING_FARE | REFUNDING | COMPLETED | REVIEW_REQUIRED",
+      "items": "SettlementItem[]",
+      "receiptAvailable": "boolean",
+      "finalizedAt": "datetime | null",
+      "refundDueAt": "datetime | null",
+      "allowedActions": "string[]"
+    }
+FarePreviewItem:
+  skeleton: |
+    {
+      "memberId": "string",
+      "actualShareWon": "integer",
+      "refundDueWon": "integer (대표 0, 음수는 정책 검토)"
+    }
+FarePreview:
+  skeleton: |
+    {
+      "actualTotalWon": "integer",
+      "routeVersion": "integer",
+      "items": "FarePreviewItem[]",
+      "canFinalize": "boolean",
+      "blockingReasons": "string[]"
+    }
+Receipt:
+  skeleton: |
+    {
+      "available": "boolean",
+      "uploadedAt": "datetime",
+      "contentType": "image/jpeg | image/png | image/webp"
+    }
+Download:
+  skeleton: |
+    {
+      "downloadUrl": "uri (만료되는 비공개 URL)",
+      "expiresAt": "datetime",
+      "contentType": "string"
+    }
+Notification:
+  skeleton: |
+    {
+      "id": "string",
+      "type": "MATCH_RESULT | PREPAY | REFUND | SYSTEM",
+      "partyId": "string | null",
+      "title": "string",
+      "body": "string",
+      "target": "string (앱 내부 이동 경로)",
+      "sentAt": "datetime | null",
+      "readAt": "datetime | null"
+    }
+Evidence:
+  skeleton: |
+    {
+      "sourceLabel": "string",
+      "asOf": "datetime",
+      "unit": "string",
+      "spatialResolution": "string",
+      "temporalResolution": "string",
+      "kind": "OBSERVED | ESTIMATED",
+      "description": "string"
+    }
+DemandCandidate:
+  skeleton: |
+    {
+      "id": "string",
+      "runId": "string",
+      "universityId": "string",
+      "pickupPointId": "string",
+      "pickupPointName": "string",
+      "destinationDongId": "string",
+      "destinationDongName": "string",
+      "weekday": "integer (0=일요일, 0~6)",
+      "slotStart": "string (HH:mm)",
+      "journeyCount": "integer",
+      "failedJourneyCount": "integer",
+      "pooledJourneyCount": "integer",
+      "busSelectedCount": "integer",
+      "soloSelectedCount": "integer",
+      "estimatedWeeklyDemand": "number | null",
+      "candidateRank": "integer | null",
+      "candidateThreshold": "number | null",
+      "evidence": "Evidence[]"
+    }
+Contribution:
+  skeleton: |
+    {
+      "runId": "string",
+      "myJourneyCount": "integer",
+      "visibility": "VISIBLE | INSUFFICIENT_SAMPLE | NOT_AVAILABLE",
+      "candidateId": "string | null",
+      "remainingToCandidate": "number | null"
+    }
+ReportFilters:
+  skeleton: |
+    {
+      "periodStart": "date",
+      "periodEnd": "date",
+      "weekday": "integer | 생략",
+      "slotStart": "string (HH:mm) | 생략"
+    }
+ReportItem:
+  skeleton: |
+    {
+      "estimateId": "string",
+      "action": "SHUTTLE_EXTENSION | CITY_PROPOSAL",
+      "displayOrder": "integer",
+      "candidate": "DemandCandidate"
+    }
+StakeholderReport:
+  skeleton: |
+    {
+      "id": "string",
+      "runId": "string",
+      "format": "PDF | IMAGE",
+      "status": "DRAFT | GENERATING | READY | FAILED",
+      "filters": "ReportFilters",
+      "items": "ReportItem[]",
+      "generatedAt": "datetime | null",
+      "downloadAvailable": "boolean"
+    }
