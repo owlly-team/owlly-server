@@ -63,4 +63,14 @@ public class Notification extends BaseTimeEntity {
 
     @Column(name = "read_at")
     private Instant readAt;
+
+    /**
+     * 처음 읽은 시각을 남긴다. 이미 읽었으면 그대로 둔다(여러 번 눌러도 최초 시각 유지).
+     * 예) 학생이 알림 목록에서 "매칭됐어요" 알림을 누를 때.
+     */
+    public void markRead(Instant now) {
+        if (this.readAt == null) {
+            this.readAt = now;
+        }
+    }
 }
