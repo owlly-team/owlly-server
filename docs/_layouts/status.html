@@ -25,12 +25,12 @@ h2{font-size:18px;margin:28px 0 8px;padding-top:12px;border-top:1px solid #eef0f
 .chip{border:1px solid #e5e7eb;background:#f9fafb;color:#6b7280;padding:5px 13px;border-radius:999px;
   font-size:13px;cursor:pointer;user-select:none}
 .chip.active{background:#eef2ff;border-color:#818cf8;color:#3730a3}
-.api-head{display:grid;grid-template-columns:62px 54px 1.1fr 1.2fr 60px 64px;gap:10px;
+.api-head{display:grid;grid-template-columns:62px 54px 1.1fr 1.2fr 60px 76px;gap:10px;
   padding:6px 12px;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase}
 .api-row{border:1px solid #e5e7eb;border-radius:6px;margin:5px 0;background:#fff}
 .api-row[open]{border-color:#9aa4b2;box-shadow:0 1px 4px rgba(0,0,0,.06)}
 .api-row summary{list-style:none;cursor:pointer;padding:9px 12px;
-  display:grid;grid-template-columns:62px 54px 1.1fr 1.2fr 60px 64px;gap:10px;align-items:center}
+  display:grid;grid-template-columns:62px 54px 1.1fr 1.2fr 60px 76px;gap:10px;align-items:center}
 .api-row summary::-webkit-details-marker{display:none}
 .api-row summary:hover{background:#f9fafb}
 .api-row summary>*{min-width:0;overflow:hidden;text-overflow:ellipsis}
@@ -41,8 +41,13 @@ h2{font-size:18px;margin:28px 0 8px;padding-top:12px;border-top:1px solid #eef0f
 .api-path{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#1f2937;overflow-wrap:anywhere}
 .api-desc{font-size:12.5px;color:#6b7280;overflow-wrap:anywhere}
 .api-owner{font-size:12px;color:#4b5563}
-.st-done{color:#16a34a;font-weight:700;font-size:12px}
-.st-todo{color:#9ca3af;font-weight:700;font-size:12px}
+.st{font-weight:700;font-size:12px;line-height:1.3}
+.st small{display:block;font-weight:500;font-size:11px}
+.st-done{color:#16a34a}
+.st-doing{color:#2563eb}
+.st-wait{color:#d97706}
+.st-todo{color:#9ca3af}
+.ring-cap small.cap-wait{color:#d97706}
 .api-body{padding:2px 14px 14px}
 .api-body .meta{font-size:12.5px;color:#4b5563;margin:2px 0}
 .api-body pre{background:#0f172a;color:#e2e8f0;padding:11px 13px;border-radius:6px;
@@ -59,7 +64,7 @@ h2{font-size:18px;margin:28px 0 8px;padding-top:12px;border-top:1px solid #eef0f
 .note{margin-top:8px;color:#6b7280;font-size:12.5px}
 @media(max-width:640px){
   .api-head{display:none}
-  .api-row summary{grid-template-columns:54px 50px 1fr 58px;gap:8px}
+  .api-row summary{grid-template-columns:54px 50px 1fr 72px;gap:8px}
   .api-row summary .api-desc,.api-row summary .api-owner{display:none}
 }
 </style>
@@ -72,8 +77,7 @@ var secs=[].slice.call(document.querySelectorAll('.sec'));
 function apply(f){
   rows.forEach(function(r){
     var show=true;
-    if(f==='done')show=r.dataset.done==='true';
-    else if(f==='todo')show=r.dataset.done==='false';
+    if(f.indexOf('status:')===0)show=r.dataset.status===f.slice(7);
     else if(f.indexOf('owner:')===0)show=r.dataset.owner===f.slice(6);
     r.style.display=show?'':'none';
   });
