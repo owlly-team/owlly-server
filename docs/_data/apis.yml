@@ -584,7 +584,9 @@ sections:
         method: GET
         path: /me/notifications
         desc: 내 알림 조회
-        status: 진행 중
+        status: 대기
+        waitingFor: 인증
+        waitingNote: 서비스 로직은 develop 에 머지됨. 로그인 기능이 붙으면 컨트롤러만 연결. 푸시 발송은 별도 작업
         auth: 로그인 사용자 (AUTHENTICATED)
         success: "200 · data = Notification[]"
         req: |
@@ -595,7 +597,9 @@ sections:
         method: POST
         path: /me/notifications/{id}/read
         desc: 알림 읽음 처리
-        status: 진행 중
+        status: 대기
+        waitingFor: 인증
+        waitingNote: 서비스 로직은 develop 에 머지됨. 로그인 기능이 붙으면 컨트롤러만 연결
         auth: 로그인 사용자 (AUTHENTICATED) · Idempotency-Key 필수
         success: "200 · data = Notification"
         req: 없음
