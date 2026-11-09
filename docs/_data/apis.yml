@@ -37,17 +37,6 @@ sections:
         success: "200 · data = Bank[]"
         req: 없음
         errors: []
-      - id: API-04
-        method: GET
-        path: /pickup-points
-        desc: 고정 출발 거점 목록
-        done: true
-        auth: 학생 (STUDENT)
-        success: "200 · data = PickupPoint[]"
-        req: |
-          Query 파라미터
-          universityId (string, 선택) — 학교 거점 필터, 공용 거점 포함
-        errors: []
       - id: API-05
         method: POST
         path: /auth/email-verifications
@@ -157,6 +146,17 @@ sections:
   - name: 프로필·귀가
     owner: 박기범
     items:
+      - id: API-04
+        method: GET
+        path: /pickup-points
+        desc: 고정 출발 거점 목록
+        done: true
+        auth: 학생 (STUDENT)
+        success: "200 · data = PickupPoint[]"
+        req: |
+          Query 파라미터
+          universityId (string, 선택) — 학교 거점 필터, 공용 거점 포함
+        errors: []
       - id: API-12
         method: GET
         path: /me/profile
@@ -571,7 +571,7 @@ sections:
         errors: ["409 TRANSFER_CANCELLED"]
 
   - name: 알림
-    owner: 안시현
+    owner: 박기범
     items:
       - id: API-41
         method: GET
