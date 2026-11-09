@@ -2,13 +2,17 @@ package com.yongyong.owlly.domain.journey.repository;
 
 import com.yongyong.owlly.domain.journey.entity.RideRequest;
 import com.yongyong.owlly.domain.journey.entity.RideRequestStatus;
+import com.yongyong.owlly.domain.party.dto.MatchingGroupKey;
 import jakarta.persistence.LockModeType;
+import jakarta.persistence.QueryHint;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.repository.query.Param;
 
 /**
@@ -32,4 +36,42 @@ public interface RideRequestRepository extends JpaRepository<RideRequest, Long> 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select r from RideRequest r where r.id = :id")
     Optional<RideRequest> findByIdForUpdate(@Param("id") Long id);
+
+    /**
+     * 결과 안내 시각이 된 대기 신청들의 매칭 키(학교·거점·도착 구·출발 시각) 목록. 잠그지 않는다.
+     * 결과 안내 시각(result_due_at)이 비어 있으면 출발 시각이 dueDepartureLimit 이하인 신청을 대상으로 본다.
+     * 예) 매칭 작업이 1분마다 "지금 처리할 그룹"을 찾을 때.
+     */
+    @Query("""
+            select distinct new com.yongyong.owlly.domain.party.dto.MatchingGroupKey(
+                r.universityId, r.pickupPointId, r.districtId, r.departureAt)
+            from RideRequest r
+            where r.status = com.yongyong.owlly.domain.journey.entity.RideRequestStatus.WAITING
+              and (r.resultDueAt <= :now or (r.resultDueAt is null and r.departureAt <= :dueDepartureLimit))
+            """)
+    List<MatchingGroupKey> findDueGroupKeys(@Param("now") Instant now,
+                                            @Param("dueDepartureLimit") Instant dueDepartureLimit);
+
+    /**
+     * 한 그룹의 결과 안내 시각이 된 대기 신청을 먼저 신청한 순서(created_at, id)로 잠가서 가져온다.
+     * 다른 트랜잭션이 잠근 신청(예: 지금 취소 중인 신청)은 기다리지 않고 건너뛴다(skip locked).
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "-2"))
+    @Query("""
+            select r from RideRequest r
+            where r.status = com.yongyong.owlly.domain.journey.entity.RideRequestStatus.WAITING
+              and r.universityId = :universityId
+              and r.pickupPointId = :pickupPointId
+              and r.districtId = :districtId
+              and r.departureAt = :departureAt
+              and (r.resultDueAt <= :now or (r.resultDueAt is null and r.departureAt <= :dueDepartureLimit))
+            order by r.createdAt asc, r.id asc
+            """)
+    List<RideRequest> findDueInGroupForUpdate(@Param("universityId") Long universityId,
+                                              @Param("pickupPointId") Long pickupPointId,
+                                              @Param("districtId") Long districtId,
+                                              @Param("departureAt") Instant departureAt,
+                                              @Param("now") Instant now,
+                                              @Param("dueDepartureLimit") Instant dueDepartureLimit);
 }

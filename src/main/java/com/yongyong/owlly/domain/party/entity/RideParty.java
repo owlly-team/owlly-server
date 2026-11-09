@@ -69,4 +69,13 @@ public class RideParty extends BaseTimeEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private PartyStatus status;
+
+    /**
+     * 마지막 하차자를 대표로 정하고, 멤버들의 확정을 기다리는 상태로 바꾼다(FORMING → CONFIRMING).
+     * 팟 생성 → 멤버 생성 → 대표 지정 순서로 저장해야 해서(순환 참조) 멤버를 저장한 뒤에 부른다.
+     */
+    public void assignRepresentative(Long memberId) {
+        this.representativeMemberId = memberId;
+        this.status = PartyStatus.CONFIRMING;
+    }
 }
