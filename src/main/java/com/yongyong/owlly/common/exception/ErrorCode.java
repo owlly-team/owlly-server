@@ -27,6 +27,13 @@ public enum ErrorCode {
     POLICY_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE, "필요한 기획 정책/운영 설정이 아직 준비되지 않았습니다."),
     UPSTREAM_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "외부 경로·교통 데이터를 일시적으로 사용할 수 없습니다."),
 
+    // ===== 학교 이메일 인증 =====
+    EMAIL_DOMAIN_NOT_ALLOWED(HttpStatus.UNPROCESSABLE_ENTITY, "허용되지 않은 학교 이메일입니다."),
+    EMAIL_DELIVERY_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "인증 메일을 발송할 수 없습니다."),
+    INVALID_VERIFICATION_CODE(HttpStatus.UNPROCESSABLE_ENTITY, "인증번호가 올바르지 않습니다."),
+    VERIFICATION_EXPIRED(HttpStatus.GONE, "인증 유효기간이 만료되었습니다."),
+    VERIFICATION_USED(HttpStatus.CONFLICT, "이미 사용되었거나 무효화된 인증번호입니다."),
+
     // ===== 귀가 (journey) =====
     ACTIVE_JOURNEY_CONFLICT(HttpStatus.CONFLICT, "진행 중인 귀가가 있습니다."),
     LOCATION_UNRESOLVABLE(HttpStatus.UNPROCESSABLE_ENTITY, "하차 위치의 행정동을 찾을 수 없습니다."),

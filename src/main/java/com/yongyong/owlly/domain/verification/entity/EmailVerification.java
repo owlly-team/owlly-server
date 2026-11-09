@@ -3,6 +3,8 @@ package com.yongyong.owlly.domain.verification.entity;
 import com.yongyong.owlly.common.entity.BaseTimeEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -55,4 +57,35 @@ public class EmailVerification extends BaseTimeEntity {
 
     @Column(name = "failed_attempts", nullable = false)
     private int failedAttempts;
+
+    @Column(name = "issue_key", unique = true, length = 36)
+    private String issueKey;
+
+    @Column(name = "verify_key", unique = true, length = 36)
+    private String verifyKey;
+
+    @Column(name = "grant_hash", length = 64)
+    private String grantHash;
+
+    @Column(name = "grant_expires_at")
+    private Instant grantExpiresAt;
+
+    @Column(name = "grant_consumed_at")
+    private Instant grantConsumedAt;
+
+    /** null은 이 컬럼 추가 전에 성공한 기존 발급 건이다. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "delivery_status", length = 20)
+    private DeliveryStatus deliveryStatus;
+
+    public void invalidate(Instant now) { this.invalidatedAt = now; }
+    public void fail() { this.failedAttempts++; }
+    public void verify(String key, String hash, Instant now, Instant expiresAt) {
+        this.consumedAt = now;
+        this.verifyKey = key;
+        this.grantHash = hash;
+        this.grantExpiresAt = expiresAt;
+    }
+    public void consumeGrant(Instant now) { this.grantConsumedAt = now; }
+    public void markDelivery(DeliveryStatus status) { this.deliveryStatus = status; }
 }

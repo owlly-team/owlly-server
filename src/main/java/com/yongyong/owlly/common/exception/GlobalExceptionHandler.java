@@ -35,6 +35,11 @@ public class GlobalExceptionHandler {
     /** 서비스에서 던진 업무 예외. */
     @ExceptionHandler(OwllyException.class)
     public ResponseEntity<ApiErrorResponse> handleOwlly(OwllyException e) {
+        if (e instanceof com.yongyong.owlly.domain.verification.service.VerificationRateLimitException limit) {
+            return ResponseEntity.status(e.getErrorCode().getStatus())
+                    .header("Retry-After", Long.toString(limit.getRetryAfterSeconds()))
+                    .body(body(e.getErrorCode(), e.getDetails(), newTraceId()));
+        }
         return build(e.getErrorCode(), e.getDetails());
     }
 
