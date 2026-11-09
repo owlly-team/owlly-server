@@ -15,7 +15,7 @@ sections:
         method: GET
         path: /universities
         desc: 참여 대학·인증 도메인 조회
-        status: 시작 전
+        status: 완료
         auth: 비로그인 (PUBLIC)
         success: "200 · data = University[]"
         req: 없음
@@ -42,7 +42,7 @@ sections:
         method: POST
         path: /auth/email-verifications
         desc: 학교 이메일 인증번호 발급·재발급
-        status: 시작 전
+        status: 완료
         auth: 비로그인 (PUBLIC) · Idempotency-Key 필수
         success: "202 · data = EmailVerification"
         req: |
@@ -51,12 +51,12 @@ sections:
             "universityId": "1",
             "email": "student@university.example"
           }
-        errors: ["422 EMAIL_DOMAIN_NOT_ALLOWED", "429 RATE_LIMITED", "503 EMAIL_DELIVERY_UNAVAILABLE"]
+        errors: ["422 EMAIL_DOMAIN_NOT_ALLOWED", "409 IDEMPOTENCY_CONFLICT", "410 VERIFICATION_EXPIRED", "429 RATE_LIMITED", "503 EMAIL_DELIVERY_UNAVAILABLE", "503 POLICY_NOT_CONFIGURED"]
       - id: API-06
         method: POST
         path: /auth/email-verifications/{id}/verify
         desc: 이메일 코드 검증
-        status: 시작 전
+        status: 완료
         auth: 비로그인 (PUBLIC) · Idempotency-Key 필수
         success: "200 · data = VerificationGrant"
         req: |
@@ -64,7 +64,7 @@ sections:
           {
             "code": "123456"
           }
-        errors: ["422 INVALID_VERIFICATION_CODE", "410 VERIFICATION_EXPIRED", "409 VERIFICATION_USED", "429 RATE_LIMITED"]
+        errors: ["422 INVALID_VERIFICATION_CODE", "404 RESOURCE_NOT_FOUND", "409 IDEMPOTENCY_CONFLICT", "410 VERIFICATION_EXPIRED", "409 VERIFICATION_USED", "429 RATE_LIMITED", "503 POLICY_NOT_CONFIGURED"]
       - id: API-07
         method: POST
         path: /auth/student-registrations

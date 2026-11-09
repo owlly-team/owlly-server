@@ -28,6 +28,29 @@ DB_PASSWORD=owlly
 
 > `.env`는 커밋 금지 — `.gitignore`에 포함되어 있습니다.
 
+학교 이메일 인증을 테스트하려면 복사한 **`.env`**의 이메일 설정을 채웁니다. 이미 `.env`가 있다면 덮어쓰지 말고 `.env.example`의 이메일 설정 항목만 추가하세요.
+
+`.env`에 다음 항목을 입력하고 빈칸을 각자의 실제 설정값으로 채웁니다.
+
+```env
+VERIFICATION_SECRET=
+MAIL_FROM=
+SPRING_MAIL_HOST=smtp.gmail.com
+SPRING_MAIL_PORT=587
+SPRING_MAIL_USERNAME=
+SPRING_MAIL_PASSWORD=
+```
+
+- Gmail 계정의 2단계 인증을 켜고 앱 비밀번호를 발급받아 `SPRING_MAIL_PASSWORD`에 공백 없이 입력합니다.
+- `MAIL_FROM`과 `SPRING_MAIL_USERNAME`에 발송용 Gmail 주소를 입력합니다. 호스트와 포트는 예시의 `smtp.gmail.com`, `587`을 사용합니다.
+- `VERIFICATION_SECRET`에는 32바이트 이상의 무작위 비밀값을 입력합니다. PowerShell에서는 다음 명령으로 생성할 수 있습니다.
+
+```powershell
+[Convert]::ToHexString([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+```
+
+`.env.example`의 계정과 비밀번호는 예시이므로 복사한 후 실제 값으로 바꿔야 합니다. 실제 계정·비밀번호·비밀값은 `.env.example`에 적지 않습니다. 설정을 변경했다면 서버를 재시작하세요.
+
 ## 2. 로컬 DB(PostgreSQL) 띄우기
 
 `docker-compose.yml`이 `.env`의 값으로 PostgreSQL 컨테이너를 생성합니다.
@@ -70,6 +93,10 @@ java -jar build/libs/owlly-0.0.1-SNAPSHOT.jar
 - Health check: http://localhost:8080/actuator/health
 
 ## 참고
+
+- 학교 이메일 인증에는 `VERIFICATION_SECRET`(32바이트 이상 무작위 비밀값), `MAIL_FROM`과 `SPRING_MAIL_HOST` 등 `.env.example`의 SMTP 설정이 필요합니다. SMTP 서버·계정이 설정되지 않으면 인증 메일 발급은 실패합니다. 인증 증표는 10분 유효하며 가입 서비스는 같은 트랜잭션에서 `consumeGrant`를 호출해야 합니다.
+- 강남대학교(`kangnam.ac.kr`), 경희대학교(`khu.ac.kr`), 단국대학교(`dankook.ac.kr`), 명지대학교(`mju.ac.kr`), 한국외국어대학교(`hufs.ac.kr`)와 해당 이메일 도메인은 실행 시 없는 항목만 추가됩니다. 기존 항목의 활성 여부와 소속은 자동으로 변경하지 않습니다.
+- 탈퇴 후 이메일 재가입 정책은 회원가입·탈퇴 구현 시 DB 고유 제약 변경이 필요하며 현재 `users.email`의 단일 UNIQUE는 아직 변경되지 않았습니다.
 
 - 현재 Security는 모든 요청을 `permitAll` 상태 — 인증 로직(JWT)은 도메인 작업 시 추가 예정.
 - 테스트는 실제 PostgreSQL이 떠 있어야 통과(별도 테스트 DB 설정 전까지).
