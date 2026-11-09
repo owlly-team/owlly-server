@@ -88,4 +88,20 @@ public class RideRequest extends BaseTimeEntity {
     public void cancel() {
         this.status = RideRequestStatus.CANCELLED;
     }
+
+    /**
+     * 팟에 배정됐다(WAITING → MATCHED).
+     * 예) 매칭 작업이 같은 조건 학생 2~4명을 한 팟으로 묶었을 때.
+     */
+    public void match() {
+        this.status = RideRequestStatus.MATCHED;
+    }
+
+    /**
+     * 같이 탈 사람을 찾지 못했다(WAITING → FAILED).
+     * 예) 결과 안내 시각에 같은 조건 신청자가 혼자뿐일 때. 학생은 막차·혼자 택시를 고르거나 다시 신청한다.
+     */
+    public void fail() {
+        this.status = RideRequestStatus.FAILED;
+    }
 }
