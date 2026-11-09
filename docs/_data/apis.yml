@@ -444,7 +444,8 @@ sections:
         method: GET
         path: /parties/{id}/settlement
         desc: 예상·선송금·최종 정산 조회
-        status: 시작 전
+        status: 대기
+        waitingFor: 인증
         auth: 해당 팟 참여자 (PARTY_MEMBER) · ETag
         success: "200 · data = Settlement"
         req: 없음
