@@ -574,6 +574,7 @@ sections:
         path: /transfers/{id}/received
         desc: 수취자의 '받았어요'
         status: 대기
+        waitingFor: 인증
         auth: 해당 이체의 수취자 (TRANSFER_PAYEE) · Idempotency-Key 필수
         success: "200 · data = Transfer"
         req: 없음

@@ -78,4 +78,13 @@ public class Transfer extends BaseTimeEntity {
         this.status = TransferStatus.SENT;
         this.sentAt = sentAt;
     }
+
+    /**
+     * 수취자가 '받았어요'를 누른 것을 기록한다(PENDING/SENT → RECEIVED).
+     * 예) 환급을 받은 멤버가 확인 버튼을 누를 때. 송금자의 '보냈어요'보다 먼저 와도 허용한다(실제 수령이 먼저일 수 있음).
+     */
+    public void markReceived(Instant receivedAt) {
+        this.status = TransferStatus.RECEIVED;
+        this.receivedAt = receivedAt;
+    }
 }

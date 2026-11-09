@@ -61,4 +61,34 @@ public class TransferService {
         }
         return TransferResponse.from(transfer);
     }
+
+    /**
+     * 수취자가 '받았어요'를 누른다 (API-40). PENDING/SENT → RECEIVED.
+     *
+     * <ul>
+     *   <li>수취자 본인이 아니거나 없는 이체면 404 (남의 이체 존재 여부를 숨긴다).</li>
+     *   <li>아직 송금자가 '보냈어요'를 누르기 전(PENDING)이라도, 실제로 받았으면 수령 확인을 허용한다.</li>
+     *   <li>이미 RECEIVED 면 버튼을 다시 눌러도 현재 상태를 그대로 반환(멱등).</li>
+     *   <li>CANCELLED 면 409 TRANSFER_CANCELLED.</li>
+     * </ul>
+     *
+     * <p>TODO(정책/인증 후): 전원 선송금/환급 수령이 끝나면 다음 단계(정산 완료 등)로 넘긴다.
+     * 이미 보낸 돈의 수령 확인은 방 종료·계정 정지로 막지 않는다.
+     *
+     * @param payeeMemberId 수취자(팟 참여) ID — 인증 연결 전까지는 호출자가 넘겨준다
+     * @param transferId    대상 이체 ID
+     */
+    @Transactional
+    public TransferResponse markReceived(Long payeeMemberId, Long transferId) {
+        Transfer transfer = transferRepository.findByIdForUpdate(transferId)
+                .filter(t -> t.getPayeeMemberId().equals(payeeMemberId))
+                .orElseThrow(() -> new OwllyException(ErrorCode.RESOURCE_NOT_FOUND));
+
+        switch (transfer.getStatus()) {
+            case PENDING, SENT -> transfer.markReceived(Instant.now());
+            case RECEIVED -> { /* 이미 받음: 멱등, 현재 상태 그대로 반환 */ }
+            case CANCELLED -> throw new OwllyException(ErrorCode.TRANSFER_CANCELLED);
+        }
+        return TransferResponse.from(transfer);
+    }
 }
