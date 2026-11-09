@@ -53,11 +53,11 @@ public record SettlementResponse(
             Integer actualShareWon,     // 실제 요금 기준 부담액. 확정 전 null
             Integer refundDueWon,       // 환급액. 대표는 0. 확정 전 null
             String status,              // ESTIMATED / PREPAID / REFUND_PENDING / COMPLETED ...
-            List<Transfer> transfers    // 이 항목에 걸린 송금들
+            List<TransferResponse> transfers  // 이 항목에 걸린 송금들(공용 DTO 재사용)
     ) {
 
         /** 항목 엔티티 + 그 항목에 속한 이체 목록을 묶어 응답 한 줄로 만든다. */
-        public static Item from(SettlementItem item, List<Transfer> transfers) {
+        public static Item from(SettlementItem item, List<TransferResponse> transfers) {
             return new Item(
                     item.getId(),
                     item.getMemberId(),
@@ -67,36 +67,6 @@ public record SettlementResponse(
                     item.getRefundDueWon(),
                     item.getStatus().name(),
                     transfers);
-        }
-    }
-
-    /**
-     * 수동 송금 한 건 (docs/api.md 5절 Transfer).
-     * 엔티티 이름과 같아서, 변환 입력 타입은 엔티티 Transfer 를 전체 경로로 적는다.
-     */
-    public record Transfer(
-            Long id,
-            Long settlementItemId,
-            String kind,            // PREPAY(선송금) / REFUND(환급)
-            Long payerMemberId,     // 보내는 사람
-            Long payeeMemberId,     // 받는 사람
-            int amountWon,          // 금액
-            String status,          // PENDING / SENT / RECEIVED / CANCELLED
-            Instant sentAt,         // '보냈어요' 시각. 아직이면 null
-            Instant receivedAt      // '받았어요' 시각. 아직이면 null
-    ) {
-
-        public static Transfer from(com.yongyong.owlly.domain.settlement.entity.Transfer t) {
-            return new Transfer(
-                    t.getId(),
-                    t.getSettlementItemId(),
-                    t.getKind().name(),
-                    t.getPayerMemberId(),
-                    t.getPayeeMemberId(),
-                    t.getAmountWon(),
-                    t.getStatus().name(),
-                    t.getSentAt(),
-                    t.getReceivedAt());
         }
     }
 }

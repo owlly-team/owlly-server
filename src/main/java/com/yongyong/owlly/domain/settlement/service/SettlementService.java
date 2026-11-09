@@ -3,6 +3,7 @@ package com.yongyong.owlly.domain.settlement.service;
 import com.yongyong.owlly.common.exception.ErrorCode;
 import com.yongyong.owlly.common.exception.OwllyException;
 import com.yongyong.owlly.domain.settlement.dto.SettlementResponse;
+import com.yongyong.owlly.domain.settlement.dto.TransferResponse;
 import com.yongyong.owlly.domain.settlement.entity.Settlement;
 import com.yongyong.owlly.domain.settlement.entity.SettlementItem;
 import com.yongyong.owlly.domain.settlement.entity.Transfer;
@@ -66,9 +67,9 @@ public class SettlementService {
         // 4) 항목마다 자기 송금을 DTO 로 바꿔 끼운다. 송금 없는 항목은 빈 목록.
         List<SettlementResponse.Item> items = itemEntities.stream()
                 .map(item -> {
-                    List<SettlementResponse.Transfer> transfers =
+                    List<TransferResponse> transfers =
                             transfersByItemId.getOrDefault(item.getId(), List.of()).stream()
-                                    .map(SettlementResponse.Transfer::from)
+                                    .map(TransferResponse::from)
                                     .toList();
                     return SettlementResponse.Item.from(item, transfers);
                 })

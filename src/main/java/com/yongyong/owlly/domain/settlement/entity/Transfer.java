@@ -68,4 +68,14 @@ public class Transfer extends BaseTimeEntity {
 
     @Column(name = "received_at")
     private Instant receivedAt;
+
+    /**
+     * 송금자가 '보냈어요'를 누른 것을 기록한다(PENDING → SENT).
+     * 예) 선송금을 보낸 뒤 송금자가 확인 버튼을 누를 때. 보낼 수 있는 상태·수취계좌 여부는 서비스에서 먼저 확인한다.
+     * 실제 은행 이체를 실행하지 않고, 사용자의 수동 확인만 기록한다.
+     */
+    public void markSent(Instant sentAt) {
+        this.status = TransferStatus.SENT;
+        this.sentAt = sentAt;
+    }
 }

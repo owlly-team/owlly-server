@@ -43,7 +43,10 @@ public enum ErrorCode {
     INVALID_STATE(HttpStatus.CONFLICT, "현재 상태에서는 할 수 없는 요청입니다."),
 
     // ===== 정산 (settlement) =====
-    SETTLEMENT_NOT_READY(HttpStatus.CONFLICT, "아직 정산이 생성되지 않았습니다.");
+    SETTLEMENT_NOT_READY(HttpStatus.CONFLICT, "아직 정산이 생성되지 않았습니다."),
+    ACCOUNT_NOT_REGISTERED(HttpStatus.CONFLICT, "수취 계좌가 아직 등록되지 않았습니다."),
+    ACCOUNT_EXPIRED(HttpStatus.GONE, "수취 계좌가 만료되었습니다."),
+    TRANSFER_CANCELLED(HttpStatus.CONFLICT, "취소된 이체입니다.");
 
     private final HttpStatus status;
     private final String message;
