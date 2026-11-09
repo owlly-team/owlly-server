@@ -52,11 +52,12 @@ import org.springframework.transaction.annotation.Transactional;
  * 팟·멤버·하차 순서·대표를 저장하고, 예상 정산을 만든 뒤, 성공·실패 알림을 남긴다(api.md 2절, erd.md 6절).
  * 학생이나 관계자가 직접 매칭을 확정하는 공개 API는 두지 않는다.
  *
- * <p>아직 정해지지 않아 임시로 처리하는 것
+ * <p>결과 안내 시각·확정 마감(기획 답변)
  * <ul>
- *   <li>결과 안내 시각이 비어 있으면 출발 20분 전으로 본다.</li>
- *   <li>확정 마감은 출발 40분 전(막차 기준 산정식 확정 전).</li>
+ *   <li>막차 전 등록: 확정 마감 = 막차 타러 출발해야 할 시각, 결과 안내 = 출발 20분 전과 확정 마감 5분 전 중 이른 시각.</li>
+ *   <li>막차 후 등록: 결과 안내 = 출발 20분 전, 확정 마감 = 출발 15분 전(방 나가기 마감과 같음).</li>
  * </ul>
+ * 막차 정보(GBIS) 연동 전이라 결과 안내 시각이 비어 있으면 막차 후 기준으로 처리한다.
  * 하차 좌표는 복호화해서 읽고, 확인 코드는 암호화해서 저장한다(공통 TextCryptor).
  */
 @Service
@@ -64,7 +65,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class MatchingService {
 
     static final Duration RESULT_DUE_BEFORE_DEPARTURE = Duration.ofMinutes(20);
-    static final Duration CONFIRM_DEADLINE_BEFORE_DEPARTURE = Duration.ofMinutes(40);
+    static final Duration CONFIRM_DEADLINE_BEFORE_DEPARTURE = Duration.ofMinutes(15);
     static final int FIRST_ROUTE_VERSION = 1;
     static final String SEED_PLAINTEXT_PREFIX = "TEST:";
 
