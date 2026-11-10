@@ -1,10 +1,13 @@
 package com.yongyong.owlly.domain.journey.repository;
 
 import com.yongyong.owlly.domain.journey.entity.Journey;
+import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -40,4 +43,12 @@ public interface JourneyRepository extends JpaRepository<Journey, Long> {
                                  @Param("cursorAt") Instant cursorAt,
                                  @Param("cursorId") Long cursorId,
                                  Pageable pageable);
+
+    /**
+     * 결과를 기록하기 전에 귀가를 잠가서 가져온다(트랜잭션이 끝날 때까지 같은 귀가의 다른 변경은 기다린다).
+     * 예) 막차 선택 버튼을 거의 동시에 두 번 눌러도 한 번만 기록되고, 두 번째는 같은 결과를 본다.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select j from Journey j where j.id = :id")
+    Optional<Journey> findByIdForUpdate(@Param("id") Long id);
 }

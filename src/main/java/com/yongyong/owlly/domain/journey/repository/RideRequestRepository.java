@@ -38,6 +38,19 @@ public interface RideRequestRepository extends JpaRepository<RideRequest, Long> 
     Optional<RideRequest> findByIdForUpdate(@Param("id") Long id);
 
     /**
+     * 한 귀가의 지정한 상태 신청을 잠가서 가져온다(id 순). 처음부터 잠금 조회로 읽으므로 최신 상태다.
+     * 예) 막차를 고를 때 대기 신청을 취소하는 동안 매칭 작업이 같은 신청을 팟에 넣지 못하게 한다.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select r from RideRequest r
+            where r.journeyId = :journeyId and r.status in :statuses
+            order by r.id asc
+            """)
+    List<RideRequest> findByJourneyIdAndStatusInForUpdate(@Param("journeyId") Long journeyId,
+                                                          @Param("statuses") Collection<RideRequestStatus> statuses);
+
+    /**
      * 결과 안내 시각이 된 대기 신청들의 매칭 키(학교·거점·도착 구·출발 시각) 목록. 잠그지 않는다.
      * 결과 안내 시각(result_due_at)이 비어 있으면 출발 시각이 dueDepartureLimit 이하인 신청을 대상으로 본다.
      * 예) 매칭 작업이 1분마다 "지금 처리할 그룹"을 찾을 때.
