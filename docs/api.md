@@ -517,9 +517,9 @@
 
 **요청 본문:** 없음
 
-**처리·검증:** 로그인 학교·성별·차단 관계로 본인과 호환되는 WAITING 신청만 계산하고 본인 신청 제외. ‘구간 등록 5건 미만 숨김’은 수요 지도 규칙이며 슬롯 대기 수와 구분.
+**처리·검증:** 로그인 학교·성별·차단 관계로 본인과 호환되는 WAITING 신청만 계산하고 본인 신청 제외. ‘구간 등록 5건 미만 숨김’은 수요 지도 규칙이며 슬롯 대기 수와 구분. `date`(한국 날짜)에 있는 출발 시간대를 모두 돌려준다: 22:00~02:00, 30분 단위(화면정의서 공통 정책), 자정을 넘기는 시간대는 실제 날짜로 센다(예: 11.6이면 00:00~02:00과 22:00~23:30). `waitingCount`는 같은 학교·거점·도착 구의 WAITING 신청 중 성별 조건이 서로 맞고(한쪽이라도 동성만 원하면 성별이 같아야 함) 나와 차단한 사이가 아닌 신청만 센다. 출발 15분 전이 지난 시간대도 목록에 있고 `registrationAllowed=false`, `reason=REGISTRATION_CLOSED`(숨길지는 화면이 정함). 등록할 수 있으면 `reason`은 null. 거점·도착 동이 없거나 내 학교가 쓸 수 없으면 404, 학생이 아니면 403.
 
-**업무 오류:** `503 POLICY_NOT_CONFIGURED`
+**업무 오류:** `404 RESOURCE_NOT_FOUND`, `403 FORBIDDEN`, `503 POLICY_NOT_CONFIGURED`(서비스 시간은 기본값 22:00~02:00으로 설정돼 있어 현재 발생하지 않음)
 
 **ERD 연결:** `ride_requests`, `users`, `student_profiles`, `user_blocks`
 
@@ -544,9 +544,9 @@
 }
 ```
 
-**처리·검증:** 귀가는 UNRESOLVED여야 함. 본인 활성 신청은 전체 귀가에 걸쳐 최대 1개. 서버 허용 슬롯, 소속, 권역, 동성 조건을 검증하고 핀·성별을 신청에 스냅샷 저장. 재등록은 같은 journeyId에 새 request 행 생성; journey 집계 거점·동·시각을 이번 선택으로 갱신. 금액·대기순서는 서버 계산.
+**처리·검증:** 귀가는 UNRESOLVED여야 함. 본인 활성 신청은 전체 귀가에 걸쳐 최대 1개. 서버 허용 슬롯, 소속, 권역, 동성 조건을 검증하고 핀·성별을 신청에 스냅샷 저장. 재등록은 같은 journeyId에 새 request 행 생성; journey 집계 거점·동·시각을 이번 선택으로 갱신. 금액·대기순서는 서버 계산. 출발 시각은 22:00~02:00의 30분 단위 정각이어야 하고 출발 15분 전까지만 등록할 수 있다(아니면 422 `INVALID_DEPARTURE_SLOT`). 하차 핀은 행정동·구로 판별해 신청에 적고(판별하지 못하면 422 `LOCATION_UNRESOLVABLE`) 좌표는 암호화해 저장한다. 성별은 가입한 프로필 값을 스냅샷으로 남긴다. 결과 안내 시각(`resultDueAt`)은 막차 정보 연동 전까지 출발 20분 전(막차 후 등록 기준)으로 둔다. 같은 clientRequestKey·같은 귀가·같은 내용의 재시도는 먼저 만든 신청을 201로 반환하고, 같은 키의 다른 내용은 409 `IDEMPOTENCY_CONFLICT`. `ACTIVE_REQUEST_EXISTS`는 이 학생에게 진행 중인 동승(대기 신청, 또는 매칭됐고 팟이 아직 끝나지 않은 경우)이 있을 때. 귀가나 거점을 쓸 수 없으면 404, 학생이 아니면 403. `UNSETTLED_RIDE_RESTRICTION`은 정산이 앱 밖에서 이뤄지고 자동 제재를 MVP에서 제외했으므로(기획 답변 1·5) 적용하지 않는다.
 
-**업무 오류:** `409 ACTIVE_REQUEST_EXISTS`, `409 JOURNEY_ALREADY_RESOLVED`, `422 INVALID_DEPARTURE_SLOT`, `409 UNSETTLED_RIDE_RESTRICTION`, `503 POLICY_NOT_CONFIGURED`
+**업무 오류:** `404 RESOURCE_NOT_FOUND`, `403 FORBIDDEN`, `409 ACTIVE_REQUEST_EXISTS`, `409 JOURNEY_ALREADY_RESOLVED`, `409 IDEMPOTENCY_CONFLICT`, `422 INVALID_DEPARTURE_SLOT`, `422 LOCATION_UNRESOLVABLE`, `409 UNSETTLED_RIDE_RESTRICTION`(MVP 미적용), `503 POLICY_NOT_CONFIGURED`
 
 **ERD 연결:** `journeys`, `ride_requests`, `student_profiles`, `pickup_points`, `administrative_areas`
 

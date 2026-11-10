@@ -42,6 +42,8 @@ public enum ErrorCode {
 
     // ===== 귀가 (journey) =====
     ACTIVE_JOURNEY_CONFLICT(HttpStatus.CONFLICT, "진행 중인 귀가가 있습니다."),
+    ACTIVE_REQUEST_EXISTS(HttpStatus.CONFLICT, "이미 진행 중인 동승 신청이 있습니다."),
+    INVALID_DEPARTURE_SLOT(HttpStatus.UNPROCESSABLE_ENTITY, "선택할 수 없는 출발 시간대입니다."),
     LOCATION_UNRESOLVABLE(HttpStatus.UNPROCESSABLE_ENTITY, "하차 위치의 행정동을 찾을 수 없습니다."),
     JOURNEY_ALREADY_RESOLVED(HttpStatus.CONFLICT, "이미 결과가 확정된 귀가입니다."),
     PARTY_LEAVE_REQUIRED(HttpStatus.CONFLICT, "매칭된 팟에서 먼저 나가야 합니다."),

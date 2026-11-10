@@ -50,4 +50,12 @@ public class PickupPoint extends BaseTimeEntity {
 
     @Column(name = "is_active", nullable = false)
     private boolean active;
+
+    /**
+     * 이 학교 학생이 쓸 수 있는 거점인지: 쓸 수 있는 상태(활성)이고, 공용(학교가 비어 있음)이거나 같은 학교 전용.
+     * 예) 단국대 학생에게 "단국대 정문 거점"과 공용 "죽전역 거점"은 true, 다른 학교 전용 거점이나 점검 중인 거점은 false.
+     */
+    public boolean isUsableBy(Long universityId) {
+        return active && (this.universityId == null || this.universityId.equals(universityId));
+    }
 }

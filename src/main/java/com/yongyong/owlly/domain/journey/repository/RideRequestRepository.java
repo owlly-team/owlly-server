@@ -2,6 +2,7 @@ package com.yongyong.owlly.domain.journey.repository;
 
 import com.yongyong.owlly.domain.journey.entity.RideRequest;
 import com.yongyong.owlly.domain.journey.entity.RideRequestStatus;
+import com.yongyong.owlly.domain.journey.dto.WaitingRequestRow;
 import com.yongyong.owlly.domain.party.dto.MatchingGroupKey;
 import com.yongyong.owlly.domain.party.entity.PartyStatus;
 import jakarta.persistence.LockModeType;
@@ -10,6 +11,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -68,6 +70,32 @@ public interface RideRequestRepository extends JpaRepository<RideRequest, Long> 
             """)
     boolean existsActiveByUserId(@Param("userId") Long userId,
                                  @Param("endedPartyStatuses") Collection<PartyStatus> endedPartyStatuses);
+
+    /**
+     * 같은 학교·거점·구에서 지정한 시간대들에 매칭을 기다리는 신청(WAITING). 신청한 학생과 성별 조건을 같이 읽는다. 잠그지 않는다.
+     * 예) 출발 시간 선택 화면이 시간 칩마다 "지금 대기 인원"을 셀 때.
+     */
+    @Query("""
+            select new com.yongyong.owlly.domain.journey.dto.WaitingRequestRow(
+                r.departureAt, j.userId, r.genderSnapshot, r.sameGenderOnly)
+            from RideRequest r, Journey j
+            where j.id = r.journeyId
+              and r.status = com.yongyong.owlly.domain.journey.entity.RideRequestStatus.WAITING
+              and r.universityId = :universityId
+              and r.pickupPointId = :pickupPointId
+              and r.districtId = :districtId
+              and r.departureAt in :slots
+            """)
+    List<WaitingRequestRow> findWaitingForSlots(@Param("universityId") Long universityId,
+                                                @Param("pickupPointId") Long pickupPointId,
+                                                @Param("districtId") Long districtId,
+                                                @Param("slots") Collection<Instant> slots);
+
+    /**
+     * 신청 생성 재시도 확인용. 같은 멱등키로 이미 만든 신청이 있으면 그것을 돌려준다.
+     * 예) 응답을 못 받아 같은 신청을 다시 보냈을 때 신청이 두 개 생기지 않게 한다.
+     */
+    Optional<RideRequest> findByClientRequestKey(UUID clientRequestKey);
 
     /**
      * 결과 안내 시각이 된 대기 신청들의 매칭 키(학교·거점·도착 구·출발 시각) 목록. 잠그지 않는다.
