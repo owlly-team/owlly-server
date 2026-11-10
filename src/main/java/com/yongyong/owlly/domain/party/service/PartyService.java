@@ -29,9 +29,11 @@ import com.yongyong.owlly.domain.party.repository.RidePartyRepository;
 import com.yongyong.owlly.domain.region.dto.PickupPointResponse;
 import com.yongyong.owlly.domain.region.entity.PickupPoint;
 import com.yongyong.owlly.domain.region.repository.PickupPointRepository;
+import com.yongyong.owlly.domain.region.service.PlaceNameReader;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -78,6 +80,7 @@ public class PartyService {
     private final TaxiFareService taxiFareService;
     private final NotificationService notificationService;
     private final EncryptedValueReader encryptedValueReader;
+    private final PlaceNameReader placeNameReader;
 
     /**
      * 팟·멤버·대표·다음 행동 조회 (API-22). 이 팟의 참여자만 볼 수 있다.
@@ -99,9 +102,11 @@ public class PartyService {
         Map<Long, Integer> stopOrderByMemberId = partyStopRepository
                 .findByPartyIdAndRouteVersionOrderByStopOrderAsc(partyId, party.getRouteVersion()).stream()
                 .collect(Collectors.toMap(PartyStop::getMemberId, PartyStop::getStopOrder));
-        PickupPointResponse pickupPoint = pickupPointRepository.findById(party.getPickupPointId())
-                .map(PickupPointResponse::from)
+        PickupPoint pickupPointEntity = pickupPointRepository.findById(party.getPickupPointId())
                 .orElseThrow(() -> new IllegalStateException("출발 거점이 없습니다. id=" + party.getPickupPointId()));
+        PickupPointResponse pickupPoint = PickupPointResponse.of(pickupPointEntity,
+                placeNameReader.universityNames(Collections.singletonList(pickupPointEntity.getUniversityId()))
+                        .get(pickupPointEntity.getUniversityId()));
         Long roomId = (me.decision() == MemberDecision.ACCEPTED)
                 ? ridePartyRepository.findRoomIdByPartyId(partyId).orElse(null)
                 : null;

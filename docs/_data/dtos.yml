@@ -37,6 +37,7 @@ PickupPoint:
     {
       "id": "string",
       "universityId": "string | null",
+      "universityName": "string | null",
       "name": "string",
       "point": "Point",
       "meetingNote": "string"
@@ -118,8 +119,11 @@ Journey:
     {
       "id": "string",
       "universityId": "string",
+      "universityName": "string",
       "pickupPointId": "string",
+      "pickupPointName": "string",
       "destinationDongId": "string",
+      "destinationDongName": "string",
       "intendedDepartureAt": "datetime",
       "outcome": "UNRESOLVED | POOL_BOARDED | BUS_SELECTED | SOLO_SELECTED | CANCELLED",
       "outcomeAt": "datetime | null",
@@ -132,8 +136,11 @@ RideRequest:
       "id": "string",
       "journeyId": "string",
       "pickupPointId": "string",
+      "pickupPointName": "string",
       "districtId": "string",
+      "districtName": "string",
       "destinationDongId": "string",
+      "destinationDongName": "string",
       "departureAt": "datetime",
       "sameGenderOnly": "boolean",
       "status": "WAITING | MATCHED | FAILED | CANCELLED | EXPIRED",

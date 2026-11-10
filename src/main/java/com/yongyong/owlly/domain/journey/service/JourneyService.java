@@ -7,6 +7,7 @@ import com.yongyong.owlly.domain.journey.entity.RideRequest;
 import com.yongyong.owlly.domain.journey.entity.RideRequestStatus;
 import com.yongyong.owlly.domain.journey.repository.JourneyRepository;
 import com.yongyong.owlly.domain.journey.repository.RideRequestRepository;
+import com.yongyong.owlly.domain.region.service.PlaceNameReader;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -32,11 +33,13 @@ public class JourneyService {
 
     private final JourneyRepository journeyRepository;
     private final RideRequestRepository rideRequestRepository;
+    private final PlaceNameReader placeNameReader;
 
     /**
      * 내 귀가 기록 (API-16). 최근 귀가부터 limit 개씩.
      * - cursor 가 없으면 첫 페이지, 있으면 그다음부터.
      * - 각 귀가에 진행 중인 신청 id 를 붙인다. 예) 매칭 대기 중이면 activeRequestId 로 신청·매칭 결과를 조회할 수 있다.
+     * - 학교·거점·하차 동 이름을 붙인다. 한 페이지의 id 를 모아 종류마다 한 번씩만 읽는다.
      */
     public JourneyPage getMyJourneys(Long userId, String cursor, int limit) {
         // 한 개 더 가져와서 다음 페이지가 있는지 판단한다.
@@ -56,8 +59,17 @@ public class JourneyService {
         }
 
         Map<Long, Long> activeRequestIdByJourney = findActiveRequestIds(page);
+        Map<Long, String> universityNames = placeNameReader.universityNames(
+                page.stream().map(Journey::getUniversityId).toList());
+        Map<Long, String> pickupPointNames = placeNameReader.pickupPointNames(
+                page.stream().map(Journey::getPickupPointId).toList());
+        Map<Long, String> dongNames = placeNameReader.areaNames(
+                page.stream().map(Journey::getDestinationDongId).toList());
         List<JourneyResponse> journeys = page.stream()
-                .map(j -> JourneyResponse.of(j, activeRequestIdByJourney.get(j.getId())))
+                .map(j -> JourneyResponse.of(j, activeRequestIdByJourney.get(j.getId()),
+                        universityNames.get(j.getUniversityId()),
+                        pickupPointNames.get(j.getPickupPointId()),
+                        dongNames.get(j.getDestinationDongId())))
                 .toList();
         String nextCursor = hasMore ? JourneyCursor.encode(page.get(page.size() - 1)) : null;
         return new JourneyPage(journeys, nextCursor, hasMore);
