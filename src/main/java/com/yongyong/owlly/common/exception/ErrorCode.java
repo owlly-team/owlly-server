@@ -36,6 +36,10 @@ public enum ErrorCode {
     VERIFICATION_EXPIRED(HttpStatus.GONE, "인증 유효기간이 만료되었습니다."),
     VERIFICATION_USED(HttpStatus.CONFLICT, "이미 사용되었거나 무효화된 인증번호입니다."),
 
+    // ===== 학생 가입 =====
+    ACCOUNT_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 가입한 이메일입니다."),
+    INVALID_GENDER_CODE(HttpStatus.UNPROCESSABLE_ENTITY, "허용되지 않은 성별 코드입니다."),
+
     // ===== 귀가 (journey) =====
     ACTIVE_JOURNEY_CONFLICT(HttpStatus.CONFLICT, "진행 중인 귀가가 있습니다."),
     LOCATION_UNRESOLVABLE(HttpStatus.UNPROCESSABLE_ENTITY, "하차 위치의 행정동을 찾을 수 없습니다."),
