@@ -17,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 하차 좌표 → 행정동·매칭 권역 판별 (공통).
  *
- * <p>쓰는 곳: 회원가입(기본 하차 지점), 막차·동승·혼자 택시 비교, 귀가 생성, 동승 신청.
+ * <p>쓰는 곳: 회원가입(기본 하차 지점, {@link DropoffLocationService} 로 연결), 막차·동승·혼자 택시 비교, 귀가 생성, 동승 신청.
  * 카카오에 좌표를 물어 행정동을 받고, administrative_areas 의 같은 공식 코드 줄의 id 를 돌려준다.
  * 처음 보는 시·구·동이면 그 자리에서 추가한다(행정구역 시드를 따로 넣지 않는다).
  *
@@ -31,7 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 @RequiredArgsConstructor
-public class AdministrativeAreaResolver {
+public class AdministrativeAreaResolver implements DropoffLocationService {
 
     private final KakaoLocalClient kakaoLocalClient;
     private final AdministrativeAreaRepository administrativeAreaRepository;
@@ -43,6 +43,21 @@ public class AdministrativeAreaResolver {
      */
     @Transactional
     public ResolvedArea resolve(double latitude, double longitude) {
+        Resolved resolved = resolveAreas(latitude, longitude);
+        return new ResolvedArea(resolved.dong().getId(), resolved.district().getId());
+    }
+
+    /**
+     * 회원가입이 쓰는 입구. 좌표가 속한 행정동 한 줄을 그대로 돌려준다(단계는 항상 DONG).
+     * 판별은 {@link #resolve} 와 같고, 오류도 같다(422 LOCATION_UNRESOLVABLE, 503 UPSTREAM_UNAVAILABLE).
+     */
+    @Override
+    @Transactional
+    public AdministrativeArea resolveDong(double latitude, double longitude) {
+        return resolveAreas(latitude, longitude).dong();
+    }
+
+    private Resolved resolveAreas(double latitude, double longitude) {
         KakaoRegion region;
         try {
             region = kakaoLocalClient.findAdministrativeDong(latitude, longitude)
@@ -58,7 +73,7 @@ public class AdministrativeAreaResolver {
                 ? city
                 : findOrCreate(city.getId(), hierarchy.district());
         AdministrativeArea dong = findOrCreate(district.getId(), hierarchy.dong());
-        return new ResolvedArea(dong.getId(), district.getId());
+        return new Resolved(dong, district);
     }
 
     /**
@@ -108,6 +123,12 @@ public class AdministrativeAreaResolver {
                     return administrativeAreaRepository.findByOfficialCode(area.officialCode()).orElseThrow();
                 });
     }
+
+    /** 판별 결과 행정구역 줄. district 는 구, 구가 없는 시·군이면 시. */
+    private record Resolved(
+            AdministrativeArea dong,       // 하차 행정동 (단계 DONG)
+            AdministrativeArea district    // 같은 방향 매칭 권역
+    ) {}
 
     /** 시·구·동 세 단계. district 가 null 이면 구가 없는 시(군). */
     record Hierarchy(
