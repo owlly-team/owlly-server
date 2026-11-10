@@ -461,9 +461,9 @@
 }
 ```
 
-**처리·검증:** 학교는 로그인 사용자 기준 스냅샷. 핀에서 동을 판별해 동만 journeys에 저장하고 원 좌표는 이 API에서 지속 저장하지 않음. 결과는 UNRESOLVED. 등록 재시도는 같은 clientJourneyKey를 사용.
+**처리·검증:** 학교는 로그인 사용자 기준 스냅샷. 핀에서 동을 판별해 동만 journeys에 저장하고 원 좌표는 이 API에서 지속 저장하지 않음. 결과는 UNRESOLVED. 등록 재시도는 같은 clientJourneyKey를 사용. 거점이 없거나 비활성이거나 다른 학교 전용이면 404 `RESOURCE_NOT_FOUND`(공용 거점은 모든 학교 학생이 사용). 같은 학생·같은 clientJourneyKey·같은 요청(거점·하차 동·귀가 예정 시각)을 다시 보내면 먼저 만든 귀가를 201로 반환하고, 같은 키의 다른 요청은 409 `IDEMPOTENCY_CONFLICT`. `ACTIVE_JOURNEY_CONFLICT`는 다른 귀가에 진행 중인 동승이 있을 때: 대기(WAITING) 신청이 있거나, 매칭(MATCHED)됐고 그 팟이 아직 끝나지 않은(COMPLETED·CANCELLED가 아닌) 경우. 신청이 없는 UNRESOLVED 귀가는 막지 않는다.
 
-**업무 오류:** `409 ACTIVE_JOURNEY_CONFLICT`, `422 LOCATION_UNRESOLVABLE`, `409 IDEMPOTENCY_CONFLICT`
+**업무 오류:** `404 RESOURCE_NOT_FOUND`, `409 ACTIVE_JOURNEY_CONFLICT`, `422 LOCATION_UNRESOLVABLE`, `503 UPSTREAM_UNAVAILABLE`, `409 IDEMPOTENCY_CONFLICT`
 
 **ERD 연결:** `journeys`, `users`, `administrative_areas`
 

@@ -114,7 +114,7 @@ public class JourneyService {
     }
 
     /** 귀가 한 건의 응답에 학교·거점·하차 동 이름을 붙인다. */
-    private JourneyResponse toResponse(Journey journey, Long activeRequestId) {
+    JourneyResponse toResponse(Journey journey, Long activeRequestId) {
         return JourneyResponse.of(journey, activeRequestId,
                 placeNameReader.universityNames(List.of(journey.getUniversityId())).get(journey.getUniversityId()),
                 placeNameReader.pickupPointNames(List.of(journey.getPickupPointId())).get(journey.getPickupPointId()),

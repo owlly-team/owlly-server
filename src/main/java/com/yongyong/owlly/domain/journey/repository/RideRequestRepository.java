@@ -3,6 +3,7 @@ package com.yongyong.owlly.domain.journey.repository;
 import com.yongyong.owlly.domain.journey.entity.RideRequest;
 import com.yongyong.owlly.domain.journey.entity.RideRequestStatus;
 import com.yongyong.owlly.domain.party.dto.MatchingGroupKey;
+import com.yongyong.owlly.domain.party.entity.PartyStatus;
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.QueryHint;
 import java.time.Instant;
@@ -49,6 +50,24 @@ public interface RideRequestRepository extends JpaRepository<RideRequest, Long> 
             """)
     List<RideRequest> findByJourneyIdAndStatusInForUpdate(@Param("journeyId") Long journeyId,
                                                           @Param("statuses") Collection<RideRequestStatus> statuses);
+
+    /**
+     * 학생에게 진행 중인 동승이 있는지(모든 귀가에 걸쳐). 매칭 대기 신청이거나,
+     * 매칭됐고 그 팟이 아직 끝나지 않은(endedPartyStatuses 에 없는) 경우다.
+     * 팟이 끝난 뒤에도 신청은 MATCHED 로 남으므로 팟의 현재 상태를 같이 본다(docs/api.md 3절).
+     * 예) 매칭 대기 중인 학생이 새 귀가를 만들려 하면 true → 409 ACTIVE_JOURNEY_CONFLICT.
+     */
+    @Query("""
+            select count(r) > 0 from RideRequest r
+            where r.journeyId in (select j.id from Journey j where j.userId = :userId)
+              and (r.status = com.yongyong.owlly.domain.journey.entity.RideRequestStatus.WAITING
+                   or (r.status = com.yongyong.owlly.domain.journey.entity.RideRequestStatus.MATCHED
+                       and exists (select 1 from PartyMember m, RideParty p
+                                   where m.requestId = r.id and p.id = m.partyId
+                                     and p.status not in :endedPartyStatuses)))
+            """)
+    boolean existsActiveByUserId(@Param("userId") Long userId,
+                                 @Param("endedPartyStatuses") Collection<PartyStatus> endedPartyStatuses);
 
     /**
      * 결과 안내 시각이 된 대기 신청들의 매칭 키(학교·거점·도착 구·출발 시각) 목록. 잠그지 않는다.
