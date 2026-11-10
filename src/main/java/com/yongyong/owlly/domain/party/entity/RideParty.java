@@ -78,4 +78,12 @@ public class RideParty extends BaseTimeEntity {
         this.representativeMemberId = memberId;
         this.status = PartyStatus.CONFIRMING;
     }
+
+    /**
+     * 확정이 끝나 선송금 단계로 넘어간다(CONFIRMING → PREPAYING).
+     * 예) 남은 멤버가 전원 확정해서 채팅방이 열릴 때. 이후 멤버는 대표에게 선송금을 보낸다.
+     */
+    public void startPrepaying() {
+        this.status = PartyStatus.PREPAYING;
+    }
 }

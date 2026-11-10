@@ -56,4 +56,18 @@ public class PartyMember extends BaseTimeEntity {
 
     @Column(name = "boarded_at")
     private Instant boardedAt;
+
+    /**
+     * 이 팟으로 가기로 확정한다(PENDING → ACCEPTED).
+     * 예) 매칭 결과 화면에서 "이 팟 확정하기"를 누를 때. 마감·상태 확인은 서비스에서 먼저 한다.
+     */
+    public void confirm(Instant now) {
+        this.decision = MemberDecision.ACCEPTED;
+        this.confirmedAt = now;
+    }
+
+    /** 아직 팟에 남아 있는 참여자인지(결정 전이거나 확정). 거절·이탈·미입금 제외는 빠진 사람이다. */
+    public boolean isActive() {
+        return decision == MemberDecision.PENDING || decision == MemberDecision.ACCEPTED;
+    }
 }

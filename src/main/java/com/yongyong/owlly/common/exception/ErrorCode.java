@@ -42,6 +42,9 @@ public enum ErrorCode {
     REQUEST_ALREADY_MATCHED(HttpStatus.CONFLICT, "이미 팟에 배정된 신청입니다. 팟에서 나가기로 취소해 주세요."),
     INVALID_STATE(HttpStatus.CONFLICT, "현재 상태에서는 할 수 없는 요청입니다."),
 
+    // ===== 동승 팟 (party) =====
+    CONFIRMATION_DEADLINE_PASSED(HttpStatus.CONFLICT, "동승 확정 마감이 지났습니다."),
+
     // ===== 정산 (settlement) =====
     SETTLEMENT_NOT_READY(HttpStatus.CONFLICT, "아직 정산이 생성되지 않았습니다."),
     ACCOUNT_NOT_REGISTERED(HttpStatus.CONFLICT, "수취 계좌가 아직 등록되지 않았습니다."),

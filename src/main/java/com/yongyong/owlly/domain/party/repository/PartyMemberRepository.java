@@ -22,6 +22,12 @@ public interface PartyMemberRepository extends JpaRepository<PartyMember, Long> 
     Optional<PartyMember> findByRequestId(Long requestId);
 
     /**
+     * 팟의 참여자 전원(팟에 들어온 순서).
+     * 예) 팟 확정 때 남은 멤버가 전원 확정했는지 확인할 때.
+     */
+    List<PartyMember> findByPartyIdOrderByIdAsc(Long partyId);
+
+    /**
      * 팟 참여자 전원을 학생 프로필·학교·하차 동과 함께 한 번에 읽는다(팟에 들어온 순서).
      * 참여에는 학생 번호가 없어서 참여 → 신청 → 귀가 → 학생 프로필 순서로 잇는다.
      * 예) 매칭 결과 화면의 멤버 목록(이름 일부·학교·하차 동·동성 여부)과 "내가 누구인지" 찾기.

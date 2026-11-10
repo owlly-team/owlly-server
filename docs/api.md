@@ -586,7 +586,7 @@
 
 **요청 본문:** 없음
 
-**처리·검증:** 본인 decision PENDING→ACCEPTED. 확정 마감 전, 계정 정상일 때만 가능. 방 오픈/전원 확정 기준은 정책 설정에 따라 처리하며 v0.2 기준을 임의 채택하지 않음.
+**처리·검증:** 본인 decision PENDING→ACCEPTED. 확정 마감 전, 계정 정상일 때만 가능. 이미 ACCEPTED면 같은 응답. 남은 멤버(PENDING·ACCEPTED)가 전원 확정하면 채팅방을 열고 팟을 PREPAYING으로 변경(화면정의서 v0.3 S-05). 확정 마감이 되면 확정한 사람끼리 방을 여는 처리는 서버 내부 작업(확정 마감 처리)이 담당.
 
 **업무 오류:** `409 CONFIRMATION_DEADLINE_PASSED`, `409 INVALID_STATE`, `503 POLICY_NOT_CONFIGURED`
 

@@ -4,11 +4,13 @@ import com.yongyong.owlly.common.crypto.TextCryptor;
 import com.yongyong.owlly.common.exception.ErrorCode;
 import com.yongyong.owlly.common.exception.OwllyException;
 import com.yongyong.owlly.common.util.Masking;
+import com.yongyong.owlly.domain.chat.service.ChatRoomService;
 import com.yongyong.owlly.domain.party.dto.PartyAction;
 import com.yongyong.owlly.domain.party.dto.PartyMemberResponse;
 import com.yongyong.owlly.domain.party.dto.PartyMemberRow;
 import com.yongyong.owlly.domain.party.dto.PartyResponse;
 import com.yongyong.owlly.domain.party.entity.MemberDecision;
+import com.yongyong.owlly.domain.party.entity.PartyMember;
 import com.yongyong.owlly.domain.party.entity.PartyStatus;
 import com.yongyong.owlly.domain.party.entity.PartyStop;
 import com.yongyong.owlly.domain.party.entity.RideParty;
@@ -34,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>상황: 매칭 알림이나 매칭 대기 카드를 누르면 매칭 결과 화면(S-05)이 열린다.
  * 같이 탈 사람(이름 일부·학교·하차 동·동성 여부), 내리는 순서, 대표, 그리고 지금 누를 수 있는 버튼을 보여 준다.
+ * 학생은 이 화면에서 팟을 확정하거나 빠진다.
  */
 @Service
 @RequiredArgsConstructor
@@ -51,6 +54,7 @@ public class PartyService {
     private final PartyMemberRepository partyMemberRepository;
     private final PartyStopRepository partyStopRepository;
     private final PickupPointRepository pickupPointRepository;
+    private final ChatRoomService chatRoomService;
     private final TextCryptor textCryptor;
 
     /**
@@ -106,6 +110,52 @@ public class PartyService {
                 party.getTaxiCalledAt(),
                 roomId,
                 allowedActions(party, me.decision(), now));
+    }
+
+    /**
+     * 본인 팟 확정 (API-23). 매칭 결과 화면의 "이 팟 확정하기".
+     * - 내 결정 PENDING → ACCEPTED
+     * - 이미 확정했으면 같은 응답(버튼을 두 번 눌러도 문제없게)
+     * - 이미 거절·이탈했거나 확정 단계가 아닌 팟이면 409 INVALID_STATE
+     * - 확정 마감이 지났으면 409 CONFIRMATION_DEADLINE_PASSED
+     * - 남은 멤버가 전원 확정하면 채팅방을 열고 선송금 단계로 넘긴다(화면정의서 S-05 화면 정책).
+     *   마감 시각이 됐을 때 확정한 사람끼리 여는 것은 확정 마감 처리 작업이 한다.
+     * 마지막 두 사람이 동시에 눌러도 전원 확정을 놓치지 않도록 팟을 잠근 뒤 확인한다.
+     */
+    @Transactional
+    public PartyResponse confirmParty(Long userId, Long partyId, Instant now) {
+        RideParty party = ridePartyRepository.findByIdForUpdate(partyId)
+                .orElseThrow(() -> new OwllyException(ErrorCode.RESOURCE_NOT_FOUND));
+        Long myMemberId = partyMemberRepository.findRowsByPartyId(partyId).stream()
+                .filter(row -> row.userId().equals(userId))
+                .map(PartyMemberRow::memberId)
+                .findFirst()
+                .orElseThrow(() -> new OwllyException(ErrorCode.RESOURCE_NOT_FOUND));
+        List<PartyMember> members = partyMemberRepository.findByPartyIdOrderByIdAsc(partyId);
+        PartyMember me = members.stream()
+                .filter(member -> member.getId().equals(myMemberId))
+                .findFirst()
+                .orElseThrow();
+
+        if (me.getDecision() == MemberDecision.ACCEPTED) {
+            return getParty(userId, partyId, now);
+        }
+        if (me.getDecision() != MemberDecision.PENDING || party.getStatus() != PartyStatus.CONFIRMING) {
+            throw new OwllyException(ErrorCode.INVALID_STATE);
+        }
+        if (now.isAfter(confirmDeadline(party))) {
+            throw new OwllyException(ErrorCode.CONFIRMATION_DEADLINE_PASSED);
+        }
+
+        me.confirm(now);
+        boolean everyoneConfirmed = members.stream()
+                .filter(PartyMember::isActive)
+                .allMatch(member -> member.getDecision() == MemberDecision.ACCEPTED);
+        if (everyoneConfirmed) {
+            chatRoomService.openRoom(partyId);
+            party.startPrepaying();
+        }
+        return getParty(userId, partyId, now);
     }
 
     /**
