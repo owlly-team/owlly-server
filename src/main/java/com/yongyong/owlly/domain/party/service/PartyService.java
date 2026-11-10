@@ -3,6 +3,7 @@ package com.yongyong.owlly.domain.party.service;
 import com.yongyong.owlly.common.exception.ErrorCode;
 import com.yongyong.owlly.common.exception.OwllyException;
 import com.yongyong.owlly.common.util.Masking;
+import com.yongyong.owlly.common.web.ETags;
 import com.yongyong.owlly.domain.chat.service.ChatRoomService;
 import com.yongyong.owlly.domain.fare.dto.GeoPoint;
 import com.yongyong.owlly.domain.fare.dto.RouteEstimate;
@@ -149,9 +150,10 @@ public class PartyService {
      * - 남은 멤버가 전원 확정하면 채팅방을 열고 선송금 단계로 넘긴다(화면정의서 S-05 화면 정책).
      *   마감 시각이 됐을 때 확정한 사람끼리 여는 것은 확정 마감 처리 작업이 한다.
      * 마지막 두 사람이 동시에 눌러도 전원 확정을 놓치지 않도록 팟을 잠근 뒤 확인한다.
+     * 이미 확정한 재시도가 아니면 If-Match 가 지금 팟 ETag 와 같은지 먼저 본다(다르면 412).
      */
     @Transactional
-    public PartyResponse confirmParty(Long userId, Long partyId, Instant now) {
+    public PartyResponse confirmParty(Long userId, Long partyId, Instant now, String ifMatch) {
         RideParty party = ridePartyRepository.findByIdForUpdate(partyId)
                 .orElseThrow(() -> new OwllyException(ErrorCode.RESOURCE_NOT_FOUND));
         Long myMemberId = partyMemberRepository.findRowsByPartyId(partyId).stream()
@@ -168,6 +170,7 @@ public class PartyService {
         if (me.getDecision() == MemberDecision.ACCEPTED) {
             return getParty(userId, partyId, now);
         }
+        requireNotChanged(userId, partyId, now, ifMatch);
         if (me.getDecision() != MemberDecision.PENDING || party.getStatus() != PartyStatus.CONFIRMING) {
             throw new OwllyException(ErrorCode.INVALID_STATE);
         }
@@ -198,9 +201,10 @@ public class PartyService {
      * - 2명 이상 남으면 빠진 사람만 지운 하차 순서로 경로를 다시 계산해 새 경로 버전으로 저장한다.
      *   대표(마지막 하차자)는 그대로다.
      * 예상 정산 다시 계산은 정산 쪽 예상 정산이 채워지면 붙인다.
+     * 이미 빠진 재시도가 아니면 If-Match 가 지금 팟 ETag 와 같은지 먼저 본다(다르면 412).
      */
     @Transactional
-    public PartyResponse leaveParty(Long userId, Long partyId, Instant now) {
+    public PartyResponse leaveParty(Long userId, Long partyId, Instant now, String ifMatch) {
         RideParty party = ridePartyRepository.findByIdForUpdate(partyId)
                 .orElseThrow(() -> new OwllyException(ErrorCode.RESOURCE_NOT_FOUND));
         Map<Long, Long> userIdByMemberId = partyMemberRepository.findRowsByPartyId(partyId).stream()
@@ -214,6 +218,7 @@ public class PartyService {
         if (!me.isActive()) {
             return getParty(userId, partyId, now);
         }
+        requireNotChanged(userId, partyId, now, ifMatch);
         if (!LEAVABLE_STATUSES.contains(party.getStatus())) {
             throw new OwllyException(ErrorCode.INVALID_STATE);
         }
@@ -308,9 +313,10 @@ public class PartyService {
      * - 선송금을 받았는지는 확인하지 않는다. 입금 확인은 대표가 은행 앱에서 직접 한다
      *   (기획 답변 5 "송금 확인을 앱에서 하지 않는 구조", 화면정의서 S-06 대표 · 받을 금액 확인 정책)
      * 실제 택시 호출이나 호출 사실 검증은 하지 않는다(api.md).
+     * 이미 기록한 재시도가 아니면 If-Match 가 지금 팟 ETag 와 같은지 먼저 본다(다르면 412).
      */
     @Transactional
-    public PartyResponse confirmTaxiCall(Long userId, Long partyId, Instant now) {
+    public PartyResponse confirmTaxiCall(Long userId, Long partyId, Instant now, String ifMatch) {
         RideParty party = ridePartyRepository.findByIdForUpdate(partyId)
                 .orElseThrow(() -> new OwllyException(ErrorCode.RESOURCE_NOT_FOUND));
         List<PartyMemberRow> rows = partyMemberRepository.findRowsByPartyId(partyId);
@@ -325,6 +331,7 @@ public class PartyService {
         if (party.getTaxiCalledAt() != null) {
             return getParty(userId, partyId, now);
         }
+        requireNotChanged(userId, partyId, now, ifMatch);
         if (party.getStatus() != PartyStatus.PREPAYING) {
             throw new OwllyException(ErrorCode.INVALID_STATE);
         }
@@ -385,6 +392,18 @@ public class PartyService {
             }
         }
         return getParty(userId, partyId, now);
+    }
+
+    /**
+     * 학생이 마지막으로 본 팟(If-Match)이 지금 팟과 같은지 확인한다. 다르면 412 PRECONDITION_FAILED.
+     * 예) 매칭 결과 화면을 열어 둔 사이 대표가 빠져 팟이 해산됐는데 "확정하기"를 누른 경우, 다시 조회하게 한다.
+     * 이미 처리된 재시도는 이 확인 전에 같은 응답으로 끝난다(api.md 1절 "완료된 멱등 요청을 먼저 확인한 뒤 ETag 를 검사").
+     * ifMatch 가 null 이면(서버 내부 호출) 확인하지 않는다. Controller 는 If-Match 를 필수로 받는다.
+     */
+    private void requireNotChanged(Long userId, Long partyId, Instant now, String ifMatch) {
+        if (ifMatch != null && !ETags.matches(ifMatch, getParty(userId, partyId, now))) {
+            throw new OwllyException(ErrorCode.PRECONDITION_FAILED);
+        }
     }
 
     /**
