@@ -1,10 +1,12 @@
 package com.yongyong.owlly.domain.journey.repository;
 
 import com.yongyong.owlly.domain.journey.entity.Journey;
+import com.yongyong.owlly.domain.user.entity.User;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -51,4 +53,18 @@ public interface JourneyRepository extends JpaRepository<Journey, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select j from Journey j where j.id = :id")
     Optional<Journey> findByIdForUpdate(@Param("id") Long id);
+
+    /**
+     * 귀가 생성 재시도 확인용. 같은 멱등키로 이미 만든 귀가가 있으면 그것을 돌려준다.
+     * 예) 응답을 못 받아 같은 요청을 다시 보냈을 때 귀가가 두 개 생기지 않게 한다.
+     */
+    Optional<Journey> findByClientJourneyKey(UUID clientJourneyKey);
+
+    /**
+     * 한 학생의 귀가 생성을 한 번에 하나씩만 처리하려고 학생 줄을 잠근다.
+     * 예) 같은 학생이 두 기기에서 동시에 귀가를 만들어도 "진행 중인 동승" 확인과 저장이 겹치지 않는다.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select u from User u where u.id = :userId")
+    Optional<User> lockUser(@Param("userId") Long userId);
 }
