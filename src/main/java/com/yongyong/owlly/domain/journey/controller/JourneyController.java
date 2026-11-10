@@ -7,8 +7,11 @@ import com.yongyong.owlly.domain.journey.dto.JourneyChoice;
 import com.yongyong.owlly.domain.journey.dto.JourneyCreate;
 import com.yongyong.owlly.domain.journey.dto.JourneyPage;
 import com.yongyong.owlly.domain.journey.dto.JourneyResponse;
+import com.yongyong.owlly.domain.journey.dto.RideRequestCreate;
+import com.yongyong.owlly.domain.journey.dto.RideRequestResponse;
 import com.yongyong.owlly.domain.journey.service.JourneyCreateService;
 import com.yongyong.owlly.domain.journey.service.JourneyService;
+import com.yongyong.owlly.domain.journey.service.RideRequestCreateService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -41,6 +44,7 @@ public class JourneyController {
 
     private final JourneyService journeyService;
     private final JourneyCreateService journeyCreateService;
+    private final RideRequestCreateService rideRequestCreateService;
 
     /**
      * API-16 내 귀가 기록 조회. 최근 귀가부터 limit 개씩, 다음 페이지는 meta.nextCursor 로.
@@ -67,6 +71,21 @@ public class JourneyController {
             @Valid @RequestBody JourneyCreate request) {
         IdempotencyKey.requireUuid(idempotencyKey);
         return ApiResponse.of(journeyCreateService.create(principal.userId(), request));
+    }
+
+    /**
+     * API-19 동승 신청·실패 후 재등록. 귀가에 동승 신청을 붙인다(WAITING으로 시작).
+     * 매칭에 실패한 뒤 "다음 시간대로 다시 등록"할 때도 같은 귀가에 이 API를 새 clientRequestKey로 다시 호출한다.
+     */
+    @PostMapping("/journeys/{journeyId}/ride-requests")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ApiResponse<RideRequestResponse> createRideRequest(
+            @AuthenticationPrincipal SessionPrincipal principal,
+            @PathVariable @Positive Long journeyId,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @Valid @RequestBody RideRequestCreate request) {
+        IdempotencyKey.requireUuid(idempotencyKey);
+        return ApiResponse.of(rideRequestCreateService.create(principal.userId(), journeyId, request, Instant.now()));
     }
 
     /**

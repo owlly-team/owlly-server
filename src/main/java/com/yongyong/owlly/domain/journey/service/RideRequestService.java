@@ -76,7 +76,7 @@ public class RideRequestService {
     }
 
     /** 신청 응답에 거점·권역·하차 동 이름을 붙인다. */
-    private RideRequestResponse toResponse(RideRequest request, Long partyId) {
+    RideRequestResponse toResponse(RideRequest request, Long partyId) {
         Map<Long, String> areaNames = placeNameReader.areaNames(
                 List.of(request.getDistrictId(), request.getDestinationDongId()));
         return RideRequestResponse.of(request, partyId,

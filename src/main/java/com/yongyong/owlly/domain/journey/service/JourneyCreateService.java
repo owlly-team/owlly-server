@@ -33,7 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class JourneyCreateService {
 
     /** 이미 끝난 팟. 이 팟의 MATCHED 신청은 진행 중인 동승으로 보지 않는다. */
-    private static final List<PartyStatus> ENDED_PARTY_STATUSES = List.of(PartyStatus.COMPLETED, PartyStatus.CANCELLED);
+    static final List<PartyStatus> ENDED_PARTY_STATUSES = List.of(PartyStatus.COMPLETED, PartyStatus.CANCELLED);
 
     private final UserRepository userRepository;
     private final PickupPointRepository pickupPointRepository;
@@ -56,7 +56,7 @@ public class JourneyCreateService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new OwllyException(ErrorCode.RESOURCE_NOT_FOUND));
         PickupPoint pickupPoint = pickupPointRepository.findById(request.pickupPointId())
-                .filter(p -> p.isActive() && (p.getUniversityId() == null || p.getUniversityId().equals(user.getUniversityId())))
+                .filter(p -> p.isUsableBy(user.getUniversityId()))
                 .orElseThrow(() -> new OwllyException(ErrorCode.RESOURCE_NOT_FOUND));
         AdministrativeArea dong = dropoffLocations.resolveDong(request.dropoff().latitude(), request.dropoff().longitude());
         // DB 가 시각을 마이크로초까지만 저장하므로, 저장할 때와 비교할 때 같은 정밀도로 맞춘다.
