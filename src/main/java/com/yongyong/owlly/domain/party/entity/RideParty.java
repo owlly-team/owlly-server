@@ -86,4 +86,20 @@ public class RideParty extends BaseTimeEntity {
     public void startPrepaying() {
         this.status = PartyStatus.PREPAYING;
     }
+
+    /**
+     * 하차 순서가 바뀌어 새 경로 버전으로 넘어간다.
+     * 예) 멤버가 빠져 남은 사람끼리 하차 순서·구간 거리를 다시 저장했을 때.
+     */
+    public void changeRoute(int newRouteVersion) {
+        this.routeVersion = newRouteVersion;
+    }
+
+    /**
+     * 팟을 해산한다(→ CANCELLED). 대표 승계는 없다(기획 답변 3).
+     * 예) 대표가 빠지거나, 빠진 사람이 생겨 혼자만 남았을 때.
+     */
+    public void cancel() {
+        this.status = PartyStatus.CANCELLED;
+    }
 }

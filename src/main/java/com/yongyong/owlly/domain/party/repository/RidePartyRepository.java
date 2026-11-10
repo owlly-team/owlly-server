@@ -41,6 +41,19 @@ public interface RidePartyRepository extends JpaRepository<RideParty, Long> {
     @Query("select c.id from ChatRoom c where c.partyId = :partyId")
     Optional<Long> findRoomIdByPartyId(@Param("partyId") Long partyId);
 
+    /**
+     * 이 참여자가 보냈거나 받은 돈이 이미 움직였는지(송금 SENT·RECEIVED). 읽기만 한다. 이체는 정산 쪽에서 만든다.
+     * 예) 선송금을 보낸 멤버나 선송금을 받은 대표가 빠지려 할 때, 돈 문제가 얽혀 자동으로 빠지지 못하게 막는다.
+     */
+    @Query("""
+            select case when count(t) > 0 then true else false end
+            from Transfer t
+            where (t.payerMemberId = :memberId or t.payeeMemberId = :memberId)
+              and t.status in (com.yongyong.owlly.domain.settlement.entity.TransferStatus.SENT,
+                               com.yongyong.owlly.domain.settlement.entity.TransferStatus.RECEIVED)
+            """)
+    boolean existsFundsInFlight(@Param("memberId") Long memberId);
+
     /** 차단한 두 학생(작은 id, 큰 id). */
     interface BlockedPair {
         Long getLowUserId();

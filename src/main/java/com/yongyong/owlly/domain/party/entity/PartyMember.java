@@ -66,6 +66,15 @@ public class PartyMember extends BaseTimeEntity {
         this.confirmedAt = now;
     }
 
+    /**
+     * 팟에서 빠진다. 확정 전이면 거절(DECLINED), 확정 뒤면 이탈(LEFT).
+     * 예) 매칭 결과 화면이나 채팅방에서 "빠지기"를 누를 때. 마감·송금 확인은 서비스에서 먼저 한다.
+     */
+    public void leave(Instant now) {
+        this.decision = (decision == MemberDecision.ACCEPTED) ? MemberDecision.LEFT : MemberDecision.DECLINED;
+        this.leftAt = now;
+    }
+
     /** 아직 팟에 남아 있는 참여자인지(결정 전이거나 확정). 거절·이탈·미입금 제외는 빠진 사람이다. */
     public boolean isActive() {
         return decision == MemberDecision.PENDING || decision == MemberDecision.ACCEPTED;

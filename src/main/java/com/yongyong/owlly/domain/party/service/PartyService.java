@@ -1,10 +1,17 @@
 package com.yongyong.owlly.domain.party.service;
 
-import com.yongyong.owlly.common.crypto.TextCryptor;
 import com.yongyong.owlly.common.exception.ErrorCode;
 import com.yongyong.owlly.common.exception.OwllyException;
 import com.yongyong.owlly.common.util.Masking;
 import com.yongyong.owlly.domain.chat.service.ChatRoomService;
+import com.yongyong.owlly.domain.fare.dto.GeoPoint;
+import com.yongyong.owlly.domain.fare.dto.RouteEstimate;
+import com.yongyong.owlly.domain.fare.service.TaxiFareService;
+import com.yongyong.owlly.domain.journey.entity.RideRequest;
+import com.yongyong.owlly.domain.journey.repository.RideRequestRepository;
+import com.yongyong.owlly.domain.notification.dto.NotificationMessage;
+import com.yongyong.owlly.domain.notification.entity.NotificationType;
+import com.yongyong.owlly.domain.notification.service.NotificationService;
 import com.yongyong.owlly.domain.party.dto.PartyAction;
 import com.yongyong.owlly.domain.party.dto.PartyMemberResponse;
 import com.yongyong.owlly.domain.party.dto.PartyMemberRow;
@@ -18,6 +25,7 @@ import com.yongyong.owlly.domain.party.repository.PartyMemberRepository;
 import com.yongyong.owlly.domain.party.repository.PartyStopRepository;
 import com.yongyong.owlly.domain.party.repository.RidePartyRepository;
 import com.yongyong.owlly.domain.region.dto.PickupPointResponse;
+import com.yongyong.owlly.domain.region.entity.PickupPoint;
 import com.yongyong.owlly.domain.region.repository.PickupPointRepository;
 import java.time.Duration;
 import java.time.Instant;
@@ -26,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -54,8 +63,11 @@ public class PartyService {
     private final PartyMemberRepository partyMemberRepository;
     private final PartyStopRepository partyStopRepository;
     private final PickupPointRepository pickupPointRepository;
+    private final RideRequestRepository rideRequestRepository;
     private final ChatRoomService chatRoomService;
-    private final TextCryptor textCryptor;
+    private final TaxiFareService taxiFareService;
+    private final NotificationService notificationService;
+    private final EncryptedValueReader encryptedValueReader;
 
     /**
      * 팟·멤버·대표·다음 행동 조회 (API-22). 이 팟의 참여자만 볼 수 있다.
@@ -87,7 +99,7 @@ public class PartyService {
         List<PartyMemberResponse> members = rows.stream()
                 .map(row -> new PartyMemberResponse(
                         row.memberId(),
-                        Masking.holderName(readName(row.realNameEncrypted())),
+                        Masking.holderName(encryptedValueReader.readText(row.realNameEncrypted())),
                         row.universityName(),
                         row.destinationDongName(),
                         row.genderSnapshot() == me.genderSnapshot(),
@@ -159,6 +171,119 @@ public class PartyService {
     }
 
     /**
+     * 팟 거절·이탈 (API-24). 매칭 결과 화면·채팅방의 "빠지기".
+     * - 확정 전이면 DECLINED, 확정 뒤면 LEFT. 내 신청은 CANCELLED
+     * - 이미 빠졌으면 같은 응답(버튼을 두 번 눌러도 문제없게)
+     * - 택시를 탄 뒤나 해산된 팟이면 409 INVALID_STATE
+     * - 출발 15분 전이 지났으면 409 CANCELLATION_DEADLINE_PASSED
+     * - 내가 보냈거나 받은 송금이 이미 있으면 409 FUNDS_ALREADY_IN_FLIGHT (돈이 얽히면 자동 처리 금지, api.md)
+     * - 대표가 빠지거나 남은 사람이 1명이면 팟 해산. 남은 사람 신청은 매칭 실패로 바꾸고 알림을 보낸다
+     *   (기획 답변 3, 화면정의서 S-05 ⑦)
+     * - 2명 이상 남으면 빠진 사람만 지운 하차 순서로 경로를 다시 계산해 새 경로 버전으로 저장한다.
+     *   대표(마지막 하차자)는 그대로다.
+     * 예상 정산 다시 계산은 정산 쪽 예상 정산이 채워지면 붙인다.
+     */
+    @Transactional
+    public PartyResponse leaveParty(Long userId, Long partyId, Instant now) {
+        RideParty party = ridePartyRepository.findByIdForUpdate(partyId)
+                .orElseThrow(() -> new OwllyException(ErrorCode.RESOURCE_NOT_FOUND));
+        Map<Long, Long> userIdByMemberId = partyMemberRepository.findRowsByPartyId(partyId).stream()
+                .collect(Collectors.toMap(PartyMemberRow::memberId, PartyMemberRow::userId));
+        List<PartyMember> members = partyMemberRepository.findByPartyIdOrderByIdAsc(partyId);
+        PartyMember me = members.stream()
+                .filter(member -> userId.equals(userIdByMemberId.get(member.getId())))
+                .findFirst()
+                .orElseThrow(() -> new OwllyException(ErrorCode.RESOURCE_NOT_FOUND));
+
+        if (!me.isActive()) {
+            return getParty(userId, partyId, now);
+        }
+        if (!LEAVABLE_STATUSES.contains(party.getStatus())) {
+            throw new OwllyException(ErrorCode.INVALID_STATE);
+        }
+        if (now.isAfter(party.getDepartureAt().minus(LEAVE_DEADLINE_BEFORE_DEPARTURE))) {
+            throw new OwllyException(ErrorCode.CANCELLATION_DEADLINE_PASSED);
+        }
+        if (ridePartyRepository.existsFundsInFlight(me.getId())) {
+            throw new OwllyException(ErrorCode.FUNDS_ALREADY_IN_FLIGHT);
+        }
+
+        Map<Long, RideRequest> requestById = rideRequestRepository.findAllById(
+                        members.stream().map(PartyMember::getRequestId).toList()).stream()
+                .collect(Collectors.toMap(RideRequest::getId, Function.identity()));
+        me.leave(now);
+        requestById.get(me.getRequestId()).cancel();
+
+        List<PartyMember> remaining = members.stream().filter(PartyMember::isActive).toList();
+        boolean representativeLeft = me.getId().equals(party.getRepresentativeMemberId());
+        if (representativeLeft || remaining.size() < PartyGrouper.MIN_PARTY_SIZE) {
+            disband(party, remaining, requestById, userIdByMemberId, representativeLeft);
+        } else {
+            rerouteWithout(party, me, members, requestById, now);
+        }
+        return getParty(userId, partyId, now);
+    }
+
+    /** 팟을 해산하고, 남은 사람의 신청을 매칭 실패로 바꿔 알린다(화면정의서 S-04 매칭 실패). */
+    private void disband(RideParty party, List<PartyMember> remaining, Map<Long, RideRequest> requestById,
+                         Map<Long, Long> userIdByMemberId, boolean representativeLeft) {
+        party.cancel();
+        String title = representativeLeft ? "대표가 빠져서 이번 동승이 취소됐어요" : "이번엔 매칭되지 않았어요";
+        for (PartyMember member : remaining) {
+            RideRequest request = requestById.get(member.getRequestId());
+            request.fail();
+            notificationService.send(new NotificationMessage(
+                    userIdByMemberId.get(member.getId()),
+                    party.getId(),
+                    NotificationType.MATCH_RESULT,
+                    "party-cancelled:request:" + request.getId(),
+                    title,
+                    "막차나 혼자 택시로 귀가 방법을 다시 골라 주세요",
+                    "/ride-requests/" + request.getId(),
+                    null));
+        }
+    }
+
+    /**
+     * 빠진 사람만 지운 하차 순서로 구간 거리를 다시 받아 새 경로 버전으로 저장한다.
+     * 처음부터 다시 정렬하지 않는 이유: 마지막 하차자(대표)가 바뀌면 안 되기 때문이다(대표 승계 없음).
+     */
+    private void rerouteWithout(RideParty party, PartyMember leaver, List<PartyMember> members,
+                                Map<Long, RideRequest> requestById, Instant now) {
+        Map<Long, Long> requestIdByMemberId = members.stream()
+                .collect(Collectors.toMap(PartyMember::getId, PartyMember::getRequestId));
+        List<Long> dropOrder = partyStopRepository
+                .findByPartyIdAndRouteVersionOrderByStopOrderAsc(party.getId(), party.getRouteVersion()).stream()
+                .map(PartyStop::getMemberId)
+                .filter(memberId -> !memberId.equals(leaver.getId()))
+                .toList();
+
+        PickupPoint pickupPoint = pickupPointRepository.findById(party.getPickupPointId())
+                .orElseThrow(() -> new IllegalStateException("출발 거점이 없습니다. id=" + party.getPickupPointId()));
+        GeoPoint origin = new GeoPoint(pickupPoint.getLatitude().doubleValue(), pickupPoint.getLongitude().doubleValue());
+        List<GeoPoint> stops = dropOrder.stream()
+                .map(memberId -> encryptedValueReader.readDropoff(requestById.get(requestIdByMemberId.get(memberId))))
+                .toList();
+        RouteEstimate route = taxiFareService.estimateRoute(origin, stops, party.getDepartureAt());
+
+        int newRouteVersion = party.getRouteVersion() + 1;
+        List<PartyStop> newStops = new ArrayList<>();
+        for (int i = 0; i < dropOrder.size(); i++) {
+            newStops.add(PartyStop.builder()
+                    .partyId(party.getId())
+                    .memberId(dropOrder.get(i))
+                    .routeVersion(newRouteVersion)
+                    .stopOrder(i + 1)
+                    .segmentDistanceM(route.segmentDistancesM().get(i))
+                    .routingSource(route.routingSource())
+                    .calculatedAt(now)
+                    .build());
+        }
+        partyStopRepository.saveAll(newStops);
+        party.changeRoute(newRouteVersion);
+    }
+
+    /**
      * 지금 누를 수 있는 버튼 (화면정의서 S-05 버튼 정책).
      * <ul>
      *   <li>CONFIRM: 확정 대기 중인 팟에서 내가 아직 결정 전(PENDING)이고 확정 마감 전.
@@ -189,13 +314,5 @@ public class PartyService {
         return (party.getConfirmDeadlineAt() != null)
                 ? party.getConfirmDeadlineAt()
                 : party.getDepartureAt().minus(MatchingService.CONFIRM_DEADLINE_BEFORE_DEPARTURE);
-    }
-
-    /** 저장된 실명. 시드·테스트 데이터의 평문 값("TEST:김민준")은 그대로 읽고, 그 외는 복호화한다. */
-    private String readName(String stored) {
-        if (stored.startsWith(MatchingService.SEED_PLAINTEXT_PREFIX)) {
-            return stored.substring(MatchingService.SEED_PLAINTEXT_PREFIX.length()).trim();
-        }
-        return textCryptor.decrypt(stored);
     }
 }
