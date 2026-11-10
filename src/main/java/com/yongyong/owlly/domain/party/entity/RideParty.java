@@ -88,6 +88,14 @@ public class RideParty extends BaseTimeEntity {
     }
 
     /**
+     * 택시를 타고 이동 중인 단계로 넘어간다(→ RIDING).
+     * 예) 팟에서 처음으로 누군가 "탔어요"를 눌렀을 때. 실제 정산은 하차 후 대표가 요금을 입력하면서 시작한다.
+     */
+    public void startRiding() {
+        this.status = PartyStatus.RIDING;
+    }
+
+    /**
      * 하차 순서가 바뀌어 새 경로 버전으로 넘어간다.
      * 예) 멤버가 빠져 남은 사람끼리 하차 순서·구간 거리를 다시 저장했을 때.
      */

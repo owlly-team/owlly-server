@@ -46,6 +46,8 @@ public enum ErrorCode {
     CONFIRMATION_DEADLINE_PASSED(HttpStatus.CONFLICT, "동승 확정 마감이 지났습니다."),
     CANCELLATION_DEADLINE_PASSED(HttpStatus.CONFLICT, "출발 15분 전이 지나 팟에서 빠질 수 없습니다."),
     FUNDS_ALREADY_IN_FLIGHT(HttpStatus.CONFLICT, "이미 송금이 오간 팟이라 바로 빠질 수 없습니다."),
+    BOARDING_NOT_ALLOWED(HttpStatus.CONFLICT, "지금은 탑승 여부를 기록할 수 없습니다."),
+    BOARDING_ALREADY_RECORDED(HttpStatus.CONFLICT, "이미 기록한 탑승 여부는 바꿀 수 없습니다."),
 
     // ===== 정산 (settlement) =====
     SETTLEMENT_NOT_READY(HttpStatus.CONFLICT, "아직 정산이 생성되지 않았습니다."),

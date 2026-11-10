@@ -75,6 +75,15 @@ public class PartyMember extends BaseTimeEntity {
         this.leftAt = now;
     }
 
+    /**
+     * 택시를 탔는지 기록한다(UNKNOWN → BOARDED 또는 MISSED).
+     * 예) 채팅방 탑승 확인에서 "탔어요"·"못 탔어요"를 누를 때. 못 탔어요는 기록만 한다(기획 답변 2).
+     */
+    public void recordBoarding(BoardingStatus status, Instant now) {
+        this.boardingStatus = status;
+        this.boardedAt = now;
+    }
+
     /** 아직 팟에 남아 있는 참여자인지(결정 전이거나 확정). 거절·이탈·미입금 제외는 빠진 사람이다. */
     public boolean isActive() {
         return decision == MemberDecision.PENDING || decision == MemberDecision.ACCEPTED;

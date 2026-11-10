@@ -8,6 +8,7 @@ import com.yongyong.owlly.domain.fare.dto.GeoPoint;
 import com.yongyong.owlly.domain.fare.dto.RouteEstimate;
 import com.yongyong.owlly.domain.fare.service.TaxiFareService;
 import com.yongyong.owlly.domain.journey.entity.RideRequest;
+import com.yongyong.owlly.domain.journey.repository.JourneyRepository;
 import com.yongyong.owlly.domain.journey.repository.RideRequestRepository;
 import com.yongyong.owlly.domain.notification.dto.NotificationMessage;
 import com.yongyong.owlly.domain.notification.entity.NotificationType;
@@ -16,6 +17,7 @@ import com.yongyong.owlly.domain.party.dto.PartyAction;
 import com.yongyong.owlly.domain.party.dto.PartyMemberResponse;
 import com.yongyong.owlly.domain.party.dto.PartyMemberRow;
 import com.yongyong.owlly.domain.party.dto.PartyResponse;
+import com.yongyong.owlly.domain.party.entity.BoardingStatus;
 import com.yongyong.owlly.domain.party.entity.MemberDecision;
 import com.yongyong.owlly.domain.party.entity.PartyMember;
 import com.yongyong.owlly.domain.party.entity.PartyStatus;
@@ -45,7 +47,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>상황: 매칭 알림이나 매칭 대기 카드를 누르면 매칭 결과 화면(S-05)이 열린다.
  * 같이 탈 사람(이름 일부·학교·하차 동·동성 여부), 내리는 순서, 대표, 그리고 지금 누를 수 있는 버튼을 보여 준다.
- * 학생은 이 화면에서 팟을 확정하거나 빠진다.
+ * 학생은 이 화면에서 팟을 확정하거나 빠지고, 출발할 때는 채팅방에서 탔는지 기록한다.
  */
 @Service
 @RequiredArgsConstructor
@@ -59,11 +61,19 @@ public class PartyService {
     private static final Set<PartyStatus> LEAVABLE_STATUSES =
             Set.of(PartyStatus.CONFIRMING, PartyStatus.PREPAYING, PartyStatus.READY);
 
+    /** 탑승 확인은 출발 1시간 뒤까지 (화면정의서 S-06). */
+    static final Duration BOARDING_OPEN_AFTER_DEPARTURE = Duration.ofHours(1);
+
+    /** 탑승을 기록할 수 있는 팟 상태: 선송금·출발 대기·이동 중. 확정 전이거나 해산·정산 단계 팟은 제외. */
+    private static final Set<PartyStatus> BOARDABLE_STATUSES =
+            Set.of(PartyStatus.PREPAYING, PartyStatus.READY, PartyStatus.RIDING);
+
     private final RidePartyRepository ridePartyRepository;
     private final PartyMemberRepository partyMemberRepository;
     private final PartyStopRepository partyStopRepository;
     private final PickupPointRepository pickupPointRepository;
     private final RideRequestRepository rideRequestRepository;
+    private final JourneyRepository journeyRepository;
     private final ChatRoomService chatRoomService;
     private final TaxiFareService taxiFareService;
     private final NotificationService notificationService;
@@ -121,7 +131,7 @@ public class PartyService {
                 party.getRouteVersion(),
                 party.getTaxiCalledAt(),
                 roomId,
-                allowedActions(party, me.decision(), now));
+                allowedActions(party, me.decision(), me.boardingStatus(), now));
     }
 
     /**
@@ -284,14 +294,58 @@ public class PartyService {
     }
 
     /**
+     * 본인 탑승·미탑승 기록 (API-26). 채팅방 탑승 확인의 "탔어요"·"못 탔어요".
+     * - 확정한 멤버가 탑승 확인 시간 안에만 기록할 수 있고, 아니면 409 BOARDING_NOT_ALLOWED
+     * - 같은 값을 다시 보내면 같은 응답, 다른 값으로 바꾸려 하면 409 BOARDING_ALREADY_RECORDED
+     * - 탔어요(BOARDED): 내 귀가 결과를 동승(POOL_BOARDED)으로 기록하고, 팟이 아직 출발 전 단계면 이동 중(RIDING)으로
+     * - 못 탔어요(MISSED): 기록만 한다. 환급·제재는 하지 않고 정산은 전원 탄 것으로 계산한다(기획 답변 2)
+     */
+    @Transactional
+    public PartyResponse recordBoarding(Long userId, Long partyId, BoardingStatus status, Instant now) {
+        if (status == BoardingStatus.UNKNOWN) {
+            throw new OwllyException(ErrorCode.VALIDATION_ERROR);
+        }
+        RideParty party = ridePartyRepository.findByIdForUpdate(partyId)
+                .orElseThrow(() -> new OwllyException(ErrorCode.RESOURCE_NOT_FOUND));
+        Long myMemberId = partyMemberRepository.findRowsByPartyId(partyId).stream()
+                .filter(row -> row.userId().equals(userId))
+                .map(PartyMemberRow::memberId)
+                .findFirst()
+                .orElseThrow(() -> new OwllyException(ErrorCode.RESOURCE_NOT_FOUND));
+        PartyMember me = partyMemberRepository.findById(myMemberId).orElseThrow();
+
+        if (me.getBoardingStatus() == status) {
+            return getParty(userId, partyId, now);
+        }
+        if (me.getBoardingStatus() != BoardingStatus.UNKNOWN) {
+            throw new OwllyException(ErrorCode.BOARDING_ALREADY_RECORDED);
+        }
+        if (!canRecordBoarding(party, me.getDecision(), now)) {
+            throw new OwllyException(ErrorCode.BOARDING_NOT_ALLOWED);
+        }
+
+        me.recordBoarding(status, now);
+        if (status == BoardingStatus.BOARDED) {
+            RideRequest request = rideRequestRepository.findById(me.getRequestId()).orElseThrow();
+            journeyRepository.findById(request.getJourneyId()).orElseThrow().markPoolBoarded(now);
+            if (party.getStatus() != PartyStatus.RIDING) {
+                party.startRiding();
+            }
+        }
+        return getParty(userId, partyId, now);
+    }
+
+    /**
      * 지금 누를 수 있는 버튼 (화면정의서 S-05 버튼 정책).
      * <ul>
      *   <li>CONFIRM: 확정 대기 중인 팟에서 내가 아직 결정 전(PENDING)이고 확정 마감 전.
      *       마감이 지나면 빠져서 화면은 "확정 시간이 지났어요"를 보여 준다.</li>
      *   <li>LEAVE: 내가 결정 전이거나 확정했고, 택시를 타기 전 팟이고, 출발 15분 전까지.</li>
+     *   <li>RECORD_BOARDING: 내가 확정했고 아직 탑승 여부를 기록하지 않았고, 탑승 확인 시간 안(화면정의서 S-06).</li>
      * </ul>
      */
-    static List<PartyAction> allowedActions(RideParty party, MemberDecision myDecision, Instant now) {
+    static List<PartyAction> allowedActions(RideParty party, MemberDecision myDecision,
+                                            BoardingStatus myBoarding, Instant now) {
         List<PartyAction> actions = new ArrayList<>();
 
         if (party.getStatus() == PartyStatus.CONFIRMING
@@ -306,7 +360,25 @@ public class PartyService {
                 && !now.isAfter(leaveDeadline)) {
             actions.add(PartyAction.LEAVE);
         }
+
+        if (canRecordBoarding(party, myDecision, now) && myBoarding == BoardingStatus.UNKNOWN) {
+            actions.add(PartyAction.RECORD_BOARDING);
+        }
         return actions;
+    }
+
+    /**
+     * 탑승 여부를 기록할 수 있는지: 내가 확정한 멤버이고, 해산·정산 전 팟이고, 탑승 확인 시간 안.
+     * 탑승 확인 시간은 출발 15분 전(빠지기 마감, 이때부터 집결 단계)부터 출발 1시간 뒤까지로 본다
+     * (화면정의서 S-06 "탑승 확인은 출발 1시간 안에만 가능").
+     */
+    static boolean canRecordBoarding(RideParty party, MemberDecision myDecision, Instant now) {
+        Instant opensAt = party.getDepartureAt().minus(LEAVE_DEADLINE_BEFORE_DEPARTURE);
+        Instant closesAt = party.getDepartureAt().plus(BOARDING_OPEN_AFTER_DEPARTURE);
+        return myDecision == MemberDecision.ACCEPTED
+                && BOARDABLE_STATUSES.contains(party.getStatus())
+                && !now.isBefore(opensAt)
+                && !now.isAfter(closesAt);
     }
 
     /** 확정 마감. 저장된 값이 비어 있으면 막차 후 기준(출발 15분 전)으로 본다(기획 답변 4). */

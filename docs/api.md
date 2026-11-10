@@ -634,7 +634,7 @@
 }
 ```
 
-**처리·검증:** 본인 참여가 ACCEPTED이고 집결 단계일 때만 기록. BOARDED면 journey.outcome=POOL_BOARDED. MISSED는 사실만 기록하며 자동 전액 환급·제재를 실행하지 않음. 한 번 확인한 값을 다른 값으로 변경하려면 운영 정정 정책 필요. BOARDED가 기록되면 팟을 RIDING으로 전환할 수 있지만 실제 정산은 하차 후 대표 동작으로 진행한다.
+**처리·검증:** 본인 참여가 ACCEPTED이고, 팟이 PREPAYING/READY/RIDING이고, 탑승 확인 시간(출발 15분 전부터 출발 1시간 뒤까지, 화면정의서 v0.3 S-06)일 때만 기록. 아니면 409 BOARDING_NOT_ALLOWED. BOARDED면 journey.outcome=POOL_BOARDED(outcomeSource=BOARDING_CONFIRMATION)이고 팟을 RIDING으로 전환. MISSED는 사실만 기록하며 자동 전액 환급·제재를 실행하지 않음(정산은 전원 탄 것으로 계산, 기획 답변). 같은 값 재전송은 같은 응답, 다른 값으로 변경은 409 BOARDING_ALREADY_RECORDED. 실제 정산은 하차 후 대표 동작으로 진행한다.
 
 **업무 오류:** `409 BOARDING_NOT_ALLOWED`, `409 BOARDING_ALREADY_RECORDED`, `503 POLICY_NOT_CONFIGURED`
 
@@ -1357,7 +1357,7 @@
 | `routeVersion` | integer | 예 | 경로 버전; 최소 1 |
 | `taxiCalledAt` | string (date-time) / null | 예 | 대표의 외부 호출 확인 |
 | `roomId` | string / null | 예 | 접근 가능한 방 |
-| `allowedActions` | string[] | 예 | 서버가 계산한 지금 누를 수 있는 버튼; CONFIRM(확정 마감 전·결정 전) / LEAVE(출발 15분 전까지). 택시 호출 확인·탑승 기록은 해당 API 구현 때 추가 |
+| `allowedActions` | string[] | 예 | 서버가 계산한 지금 누를 수 있는 버튼; CONFIRM(확정 마감 전·결정 전) / LEAVE(출발 15분 전까지) / RECORD_BOARDING(확정 멤버, 출발 15분 전~출발 1시간 뒤, 미기록). 택시 호출 확인은 해당 API 구현 때 추가 |
 
 ### BoardingRequest
 

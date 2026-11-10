@@ -3,6 +3,7 @@ package com.yongyong.owlly.domain.party.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.yongyong.owlly.domain.party.dto.PartyAction;
+import com.yongyong.owlly.domain.party.entity.BoardingStatus;
 import com.yongyong.owlly.domain.party.entity.MemberDecision;
 import com.yongyong.owlly.domain.party.entity.PartyStatus;
 import com.yongyong.owlly.domain.party.entity.RideParty;
@@ -30,7 +31,7 @@ class PartyServiceTest {
     void 확정_마감_전이고_결정_전이면_확정하기와_빠지기() {
         RideParty party = party(PartyStatus.CONFIRMING, minutesBeforeDeparture(15));
 
-        assertThat(PartyService.allowedActions(party, MemberDecision.PENDING, minutesBeforeDeparture(20)))
+        assertThat(PartyService.allowedActions(party, MemberDecision.PENDING, BoardingStatus.UNKNOWN, minutesBeforeDeparture(20)))
                 .containsExactly(PartyAction.CONFIRM, PartyAction.LEAVE);
     }
 
@@ -38,7 +39,7 @@ class PartyServiceTest {
     void 막차_기준_확정_마감이_지나면_확정하기는_빠지고_빠지기만_남는다() {
         RideParty party = party(PartyStatus.CONFIRMING, minutesBeforeDeparture(40));
 
-        assertThat(PartyService.allowedActions(party, MemberDecision.PENDING, minutesBeforeDeparture(30)))
+        assertThat(PartyService.allowedActions(party, MemberDecision.PENDING, BoardingStatus.UNKNOWN, minutesBeforeDeparture(30)))
                 .containsExactly(PartyAction.LEAVE);
     }
 
@@ -47,9 +48,9 @@ class PartyServiceTest {
         RideParty party = party(PartyStatus.CONFIRMING, null);
 
         assertThat(PartyService.confirmDeadline(party)).isEqualTo(minutesBeforeDeparture(15));
-        assertThat(PartyService.allowedActions(party, MemberDecision.PENDING, minutesBeforeDeparture(15)))
+        assertThat(PartyService.allowedActions(party, MemberDecision.PENDING, BoardingStatus.UNKNOWN, minutesBeforeDeparture(15)))
                 .contains(PartyAction.CONFIRM);
-        assertThat(PartyService.allowedActions(party, MemberDecision.PENDING, minutesBeforeDeparture(14)))
+        assertThat(PartyService.allowedActions(party, MemberDecision.PENDING, BoardingStatus.UNKNOWN, minutesBeforeDeparture(14)))
                 .doesNotContain(PartyAction.CONFIRM);
     }
 
@@ -57,25 +58,40 @@ class PartyServiceTest {
     void 이미_확정했으면_빠지기만() {
         RideParty party = party(PartyStatus.CONFIRMING, minutesBeforeDeparture(15));
 
-        assertThat(PartyService.allowedActions(party, MemberDecision.ACCEPTED, minutesBeforeDeparture(20)))
+        assertThat(PartyService.allowedActions(party, MemberDecision.ACCEPTED, BoardingStatus.UNKNOWN, minutesBeforeDeparture(20)))
                 .containsExactly(PartyAction.LEAVE);
     }
 
     @Test
-    void 출발_15분_전이_지나면_아무_버튼도_없다() {
+    void 출발_15분_전이_지나면_빠지기는_없고_탑승_기록만() {
         RideParty party = party(PartyStatus.READY, minutesBeforeDeparture(15));
 
-        assertThat(PartyService.allowedActions(party, MemberDecision.ACCEPTED, minutesBeforeDeparture(14)))
+        assertThat(PartyService.allowedActions(party, MemberDecision.ACCEPTED, BoardingStatus.UNKNOWN, minutesBeforeDeparture(14)))
+                .containsExactly(PartyAction.RECORD_BOARDING);
+    }
+
+    @Test
+    void 탑승_기록은_확정한_멤버가_출발_1시간_뒤까지_한_번() {
+        RideParty party = party(PartyStatus.RIDING, minutesBeforeDeparture(15));
+
+        assertThat(PartyService.allowedActions(party, MemberDecision.ACCEPTED, BoardingStatus.UNKNOWN, minutesBeforeDeparture(-60)))
+                .containsExactly(PartyAction.RECORD_BOARDING);
+        assertThat(PartyService.allowedActions(party, MemberDecision.ACCEPTED, BoardingStatus.UNKNOWN, minutesBeforeDeparture(-61)))
                 .isEmpty();
+        assertThat(PartyService.allowedActions(party, MemberDecision.ACCEPTED, BoardingStatus.BOARDED, minutesBeforeDeparture(-10)))
+                .isEmpty();
+        assertThat(PartyService.allowedActions(party(PartyStatus.PREPAYING, minutesBeforeDeparture(15)),
+                MemberDecision.ACCEPTED, BoardingStatus.UNKNOWN, minutesBeforeDeparture(16)))
+                .containsExactly(PartyAction.LEAVE);
     }
 
     @Test
     void 이미_빠졌거나_해산된_팟이면_아무_버튼도_없다() {
         assertThat(PartyService.allowedActions(
-                party(PartyStatus.CONFIRMING, minutesBeforeDeparture(15)), MemberDecision.LEFT, minutesBeforeDeparture(20)))
+                party(PartyStatus.CONFIRMING, minutesBeforeDeparture(15)), MemberDecision.LEFT, BoardingStatus.UNKNOWN, minutesBeforeDeparture(20)))
                 .isEmpty();
         assertThat(PartyService.allowedActions(
-                party(PartyStatus.CANCELLED, minutesBeforeDeparture(15)), MemberDecision.PENDING, minutesBeforeDeparture(20)))
+                party(PartyStatus.CANCELLED, minutesBeforeDeparture(15)), MemberDecision.PENDING, BoardingStatus.UNKNOWN, minutesBeforeDeparture(20)))
                 .isEmpty();
     }
 }
