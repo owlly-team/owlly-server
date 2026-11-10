@@ -68,6 +68,16 @@ public class Journey extends BaseTimeEntity {
     private OutcomeSource outcomeSource;
 
     /**
+     * 학생이 막차·혼자 택시를 골랐다고 기록한다(→ BUS_SELECTED / SOLO_SELECTED, 출처 USER_CHOICE).
+     * 예) 매칭에 실패한 학생이 "막차로 갈게요"를 눌렀을 때.
+     */
+    public void chooseByUser(JourneyChoiceMode mode, Instant now) {
+        this.outcome = mode.outcome();
+        this.outcomeAt = now;
+        this.outcomeSource = OutcomeSource.USER_CHOICE;
+    }
+
+    /**
      * 동승으로 귀가했다고 기록한다(→ POOL_BOARDED, 출처 BOARDING_CONFIRMATION).
      * 예) 채팅방에서 "탔어요"를 눌렀을 때. 학생이 귀가 선택 화면에서 직접 고를 수는 없다(api.md API-17).
      */

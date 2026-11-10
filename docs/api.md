@@ -496,9 +496,9 @@
 }
 ```
 
-**처리·검증:** 기존 대기 신청이 있으면 같은 트랜잭션에서 CANCELLED 처리 후 선택 기록. 이미 매칭된 팟은 먼저 허용된 팟 이탈 절차가 필요. POOL_BOARDED는 이 API로 입력 불가. 동일 선택 재전송은 현재 결과 반환; 다른 최종 선택으로 덮어쓰기 금지. 취소로 journey가 CANCELLED인 경우 선택 기록 불가.
+**처리·검증:** 기존 대기 신청이 있으면 같은 트랜잭션에서 CANCELLED 처리 후 선택 기록. 이미 매칭된 팟은 먼저 허용된 팟 이탈 절차가 필요. POOL_BOARDED는 이 API로 입력 불가. 동일 선택 재전송은 현재 결과 반환; 다른 최종 선택으로 덮어쓰기 금지. 취소로 journey가 CANCELLED인 경우 선택 기록 불가. 본인 귀가가 아니거나 없는 귀가는 둘 다 404 `RESOURCE_NOT_FOUND`. 이미 동승 탑승(POOL_BOARDED)·다른 선택이 기록됐거나 CANCELLED인 귀가는 `JOURNEY_ALREADY_RESOLVED`. 선택이 기록되면 활성 신청이 없어 응답의 `activeRequestId`는 null.
 
-**업무 오류:** `409 PARTY_LEAVE_REQUIRED`, `409 JOURNEY_ALREADY_RESOLVED`
+**업무 오류:** `404 RESOURCE_NOT_FOUND`, `409 PARTY_LEAVE_REQUIRED`, `409 JOURNEY_ALREADY_RESOLVED`
 
 **ERD 연결:** `journeys`, `ride_requests`
 
