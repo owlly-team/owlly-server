@@ -208,7 +208,7 @@ sections:
         method: POST
         path: /journeys
         desc: 한 번의 귀가 의도 생성
-        status: 시작 전
+        status: 완료
         auth: 학생 (STUDENT) · Idempotency-Key 필수
         success: "201 · data = Journey"
         req: |
@@ -235,7 +235,7 @@ sections:
         method: PUT
         path: /journeys/{id}/choice
         desc: 막차 또는 혼자 택시 선택 기록
-        status: 시작 전
+        status: 완료
         auth: 해당 귀가의 학생 (OWNER_JOURNEY) · Idempotency-Key 필수
         success: "200 · data = Journey"
         req: |
@@ -252,7 +252,7 @@ sections:
         method: GET
         path: /matching-slots
         desc: 조건별 출발 슬롯·대기 수 조회
-        status: 시작 전
+        status: 완료
         auth: 학생 (STUDENT)
         success: "200 · data = MatchingSlot[]"
         req: |
@@ -264,7 +264,7 @@ sections:
         method: POST
         path: /journeys/{id}/ride-requests
         desc: 동승 신청·실패 후 재등록
-        status: 시작 전
+        status: 완료
         auth: 해당 귀가의 학생 (OWNER_JOURNEY) · Idempotency-Key 필수
         success: "201 · data = RideRequest"
         req: |
