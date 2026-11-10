@@ -47,7 +47,7 @@
 | 요일 | 0=일요일, 1=월요일, …, 6=토요일 |
 | 필수·NULL | DTO 표에 구분. NULL은 아직 결정되지 않았거나 제공 불가능한 값이며 0원/빈 문자열로 대체하지 않음 |
 | 요청 검증 | 정의에 없는 필드는 422. 역할·소유자·상태·계산 금액은 서버가 결정 |
-| 문자열 제한 | 이름 1~50자, 메시지 1~2,000자, 신고 설명 최대 1,000자 등은 이 초안의 구현 제안 |
+| 문자열 제한 | 가입 이름은 화면 정의서 v0.3 기준 앞뒤 공백 제거 후 2~20자. 메시지·신고 등 타 기능의 초안 제한은 해당 기능 구현 시 v0.3과 대조 |
 | 성공 | 단건 `{"data": {...}}`, 목록 `{"data": [...]}`. 204는 body 없음 |
 | 페이지 | 일반 목록은 cursor·limit(기본 20, 최대 100)과 meta.nextCursor/hasMore. 메시지는 afterId/beforeId 및 MessagePageMeta 사용 |
 | 오류 | `{"error":{"code","message","details","traceId"}}`. 민감정보·타인 자원 존재 여부를 details에 넣지 않음 |
@@ -58,7 +58,7 @@
 
 - 로그인된 POST/PUT/PATCH/DELETE에는 `X-CSRF-Token`을 요구합니다. 토큰은 로그인 또는 GET /auth/session 응답에서 받습니다. 공개 인증 POST는 `ALLOWED_ORIGINS`에 등록된 `Origin` 헤더가 필수이며 누락/불허는 403 FORBIDDEN입니다. 현재 이메일 인증 속도 제한은 구현되어 있으며 학생·관계자 로그인 속도 제한은 후속 구현입니다.
 - 서버 세션은 Spring Session의 `SPRING_SESSION`/`SPRING_SESSION_ATTRIBUTES` 인프라 테이블로 관리하며 업무 ERD와 구분합니다. 인증 증표·멱등 요청 캐시는 각 기능의 인프라 저장소 설계 항목입니다.
-- 학생 가입은 이메일 인증 후 생성합니다. 학생 재로그인에 같은 이메일 OTP를 사용하는 안은 **제안**입니다. 관계자는 발급된 이메일/비밀번호로 로그인합니다.
+- 학생 가입은 이메일 인증 후 계정·프로필·인증 증표 소비를 하나의 트랜잭션에서 저장하고, 커밋 성공 후 서버 세션을 발급합니다. 학생 재로그인에 같은 이메일 OTP를 사용하는 안은 **제안**이며 별도 구현 대상입니다. 관계자는 발급된 이메일/비밀번호로 로그인합니다.
 - 역할이 맞지 않으면 403, 타인의 개별 자원이거나 공개할 수 없는 ID이면 원칙적으로 404로 동일 처리합니다. 요청의 userId·senderId·createdBy·role을 신뢰하지 않습니다.
 - 계정 상태와 역할을 매 요청 DB에서 확인합니다. 탈퇴/삭제 계정은 세션을 폐기하고 401을 반환합니다. 정지 계정은 현재 세션 조회·로그아웃만 허용하며 나머지는 403 ACCOUNT_SUSPENDED입니다. 이미 발생한 선송금·환급 확인을 위한 예외 접근 범위는 **기획 확인 사항**이며 정책 확정 후 확장합니다.
 
@@ -197,9 +197,9 @@
 
 **요청 본문:** 없음
 
-**처리·검증:** 성별 선택지와 기본 동성 옵션은 승인된 기획 설정에서 공급. 임의 코드로 가입하면 422.
+**처리·검증:** 화면 정의서 v0.3의 여성(`FEMALE`)·남성(`MALE`) 선택지와 `sameGenderDefault: true`를 반환합니다. 동성 매칭 끄기도 허용하며 프런트는 켜기·끄기 토글을 활성화합니다. 응답의 true는 초기 기본값이며 켜짐만 허용한다는 의미가 아닙니다. 가입 시 다른 성별 코드는 422 INVALID_GENDER_CODE입니다.
 
-**업무 오류:** `503 POLICY_NOT_CONFIGURED`
+**업무 오류:** 없음 (공통 오류 계약 적용)
 
 **ERD 연결:** 기준 설정 또는 인증 인프라
 
@@ -281,7 +281,7 @@
   "verificationToken": "example-one-time-proof",
   "profile": {
     "realName": "김나연",
-    "genderCode": "APPROVED_CODE",
+    "genderCode": "FEMALE",
     "sameGenderDefault": true,
     "defaultDropoff": {
       "latitude": 37.33,
@@ -291,11 +291,17 @@
 }
 ```
 
-**처리·검증:** 검증 증표의 대학·이메일로 계정 생성, 프로필과 좌표 암호화를 같은 트랜잭션에서 저장. role/status/userId는 서버 결정. 프로필 성별 코드·하차 동은 승인 선택지/역지오코딩으로 검증.
+**처리·검증:** 검증 증표의 대학·이메일로 계정을 생성합니다. 대학·이메일은 요청에서 받지 않고 인증 증표에서 얻으며 활성 대학·도메인인지 다시 검사합니다. `role=STUDENT`, `status=ACTIVE`, `userId`는 서버가 결정합니다. 이름은 앞뒤 공백 제거 후 2~20자, 성별은 `FEMALE`/`MALE`, 동성 매칭은 `true`/`false` 모두 허용하고 선택한 값을 저장합니다(생략/null이면 true). 위도 -90~90, 경도 -180~180의 유한한 숫자가 필수입니다.
 
-**인증 연결:** 가입 성공 후 서버 세션 쿠키를 발급합니다. 가입 API 자체는 후속 구현입니다.
+**현재 상태: 공통 행정동 판별 서비스 연결 대기.** 가입 측은 `DropoffLocationService.resolveDong(latitude, longitude)` 계약과 `RegistrationDropoffLocation` 연결 지점만 구현했습니다. 외부 카카오 연동·좌표→DB 행정동 판별 구현은 이 브랜치에 포함하지 않습니다. 공통 서비스를 감싼 `DropoffLocationService` 구현 Bean이 제공되면 가입 로직 변경 없이 연결됩니다. 결과는 DB에 존재하는 ID와 `level=DONG`인 행정동이어야 합니다. 공통 구현 미연결은 503 POLICY_NOT_CONFIGURED이며 증표 소비·계정 저장은 롤백되고 세션도 발급되지 않습니다. 연결 후 지역 판별 실패는 422 LOCATION_UNRESOLVABLE, 외부 장애는 503 UPSTREAM_UNAVAILABLE로 전달합니다. 실제 연동 검증 전까지 API-07은 대기 상태입니다.
 
-**업무 오류:** `410 VERIFICATION_EXPIRED`, `409 VERIFICATION_USED`, `409 ACCOUNT_ALREADY_EXISTS`, `422 INVALID_GENDER_CODE`, `422 LOCATION_UNRESOLVABLE`
+인증 증표 소비·계정·암호화한 실명/하차 좌표·프로필·가입 멱등 기록은 한 트랜잭션입니다. 위치 판별이나 저장 실패 시 증표 소비도 롤백되어 다시 시도할 수 있습니다. 기존 계정은 역할·상태에 관계없이 이메일 중복 가입을 막습니다. 탈퇴 후 재가입 정책과 이메일 UNIQUE 변경은 별도 작업입니다.
+
+`Idempotency-Key`는 UUID가 필수입니다. 같은 키·같은 정규화 요청은 기존 계정으로 201을 반환하고 세션을 새로 발급하며, 같은 키·다른 요청은 409 IDEMPOTENCY_CONFLICT입니다. 원래 인증 증표 만료까지 재시도가 가능하고, 만료 뒤에는 세션을 재발급하지 않습니다. 계정 정지·탈퇴 시 재시도 세션 발급도 막습니다. 토큰·실명·좌표 원문 대신 비밀키 기반 요청 해시와 계정 ID·만료만 인프라 테이블 `student_registration_receipts`에 보관하고, 만료 기록은 주기적으로 삭제합니다. 이미 만료 기록이 정리된 뒤의 증표 재사용은 VERIFICATION_USED 또는 VERIFICATION_EXPIRED입니다.
+
+**인증 연결:** DB 커밋 성공 후 서버 세션 쿠키를 발급하고 201 `data: Session`을 반환합니다. `data.user.universityId`를 유지하면서 `data.user.universityName`을 추가했습니다. 로그인/재시도 시 세션 ID와 CSRF 토큰은 새로 생성하며 응답은 `Cache-Control: no-store`입니다. 가입 응답은 세션 DTO이므로 하차 동 이름은 포함하지 않습니다. `defaultDongId`와 `defaultDongName`을 함께 제공하는 프로필 조회 API는 후속 `feat/student-profile` 범위입니다.
+
+**업무 오류:** `410 VERIFICATION_EXPIRED`, `409 VERIFICATION_USED`, `409 ACCOUNT_ALREADY_EXISTS`, `409 IDEMPOTENCY_CONFLICT`, `422 EMAIL_DOMAIN_NOT_ALLOWED`, `422 INVALID_GENDER_CODE`, `422 LOCATION_UNRESOLVABLE`, `422 VALIDATION_ERROR`, `403 FORBIDDEN`, `403 ACCOUNT_SUSPENDED`, `403 ACCOUNT_UNAVAILABLE`, `503 POLICY_NOT_CONFIGURED`, `503 UPSTREAM_UNAVAILABLE`
 
 **ERD 연결:** `users`, `student_profiles`, `email_verifications`, `administrative_areas`
 
@@ -1107,8 +1113,8 @@
 
 | 필드 | 타입 | 필수 | 의미·제약 |
 | --- | --- | --- | --- |
-| `genderOptions` | ProfileOption[] | 예 | 승인된 성별 선택지. 값은 서버 설정 기준 |
-| `sameGenderDefault` | boolean | 예 | 기본 true |
+| `genderOptions` | ProfileOption[] | 예 | FEMALE/여성, MALE/남성 순서 |
+| `sameGenderDefault` | boolean | 예 | 초기 기본값 true. 가입 시 켜기·끄기 모두 허용 |
 
 ### Bank
 
@@ -1134,6 +1140,7 @@
 | --- | --- | --- | --- |
 | `id` | string | 예 | 계정 ID; 형식: `^[1-9][0-9]*$` |
 | `universityId` | string | 예 | 소속 대학 ID; 형식: `^[1-9][0-9]*$` |
+| `universityName` | string | 예 | 소속 대학명. 가입·현재 세션 조회 응답에 포함 |
 | `email` | string (email) | 예 | 본인 이메일 |
 | `role` | string | 예 | 역할; STUDENT / STAFF |
 | `status` | string | 예 | 계정 상태; ACTIVE / SUSPENDED / WITHDRAWN |
@@ -1161,9 +1168,9 @@
 
 | 필드 | 타입 | 필수 | 의미·제약 |
 | --- | --- | --- | --- |
-| `realName` | string | 예 | 실명; 제안 검증 범위 1~50자; 최소 1자; 최대 50자 |
+| `realName` | string | 예 | 실명; 앞뒤 공백 제거 후 2~20자 |
 | `genderCode` | string | 예 | ProfileOptions의 승인된 코드; 최소 1자; 최대 32자 |
-| `sameGenderDefault` | boolean | 아니오 | 생략하면 true; 기본 true |
+| `sameGenderDefault` | boolean | 아니오 | true/false 선택값 저장. 생략/null이면 true |
 | `defaultDropoff` | Point | 예 | 해당 DTO 참조 |
 
 ### ProfilePatch
@@ -2047,7 +2054,7 @@
 | --- | --- |
 | 학생 재로그인·세션 | 서버 쿠키 세션 방식 채택·기반 구현 완료. 개발 유휴 만료 30분(설정 가능), 운영 기간은 미정. 이메일 OTP 재로그인은 제안. 인증번호 재발송 1분, 하루 10회(한국 시간 자정 초기화), 실패 5회 시 10분 제한 |
 | 정지 계정의 정산 | 새 동승 차단과 기존 송금·환급 확인용 제한 접근 유지 제안. 예외 권한 확정 필요 |
-| 성별 코드·수정 | 승인된 선택지를 profile-options로 공급. 기존 성별 수정은 제공하지 않음 |
+| 성별 코드·수정 | 가입은 v0.3의 FEMALE/여성, MALE/남성 사용. 동성 매칭은 켜기·끄기 모두 허용하도록 확인됨(기본 true). v0.3의 성별 수정은 후속 프로필 API에서 반영할 항목 |
 | 동승 시간·결과 마감 | 30분 슬롯은 확정. 운영 시간과 결과 안내 산정식은 서버 설정으로 확정 필요. v0.2의 시간 범위·수식을 자동 적용하지 않음 |
 | 팟 확정·채팅 오픈 | 최초 개인 확정인지 전원 확정인지, 확정 마감 뒤 처리인지 별도 확정 |
 | 취소 경계·기수령금 | 원본의 출발 15분 전 취소 적용. 정확한 경계 포함 여부는 제안. 선송금 시작 이후 취소·해산·대표 교체는 정책 확정 전 자동 처리 보류 |

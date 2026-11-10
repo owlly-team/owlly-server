@@ -17,6 +17,8 @@ import com.yongyong.owlly.domain.user.entity.Role;
 import com.yongyong.owlly.domain.user.entity.User;
 import com.yongyong.owlly.domain.user.entity.UserStatus;
 import com.yongyong.owlly.domain.user.repository.UserRepository;
+import com.yongyong.owlly.domain.university.repository.UniversityRepository;
+import com.yongyong.owlly.domain.university.entity.University;
 import com.yongyong.owlly.domain.verification.controller.EmailVerificationController;
 import com.yongyong.owlly.domain.verification.dto.EmailVerificationResponse;
 import com.yongyong.owlly.domain.verification.service.EmailVerificationService;
@@ -64,6 +66,7 @@ class SessionIntegrationTest {
     @Autowired JdbcTemplate jdbc;
     @Autowired ObjectMapper mapper;
     @MockitoBean UserRepository users;
+    @MockitoBean UniversityRepository universities;
     @MockitoBean EmailVerificationService verifications;
     User user;
 
@@ -75,6 +78,7 @@ class SessionIntegrationTest {
                 .role(Role.STUDENT).status(UserStatus.ACTIVE).build();
         ReflectionTestUtils.setField(user, "id", 101L);
         when(users.findById(101L)).thenReturn(Optional.of(user));
+        when(universities.findById(1L)).thenReturn(Optional.of(University.builder().name("한국외국어대학교").active(true).build()));
     }
 
     @Test
@@ -87,6 +91,7 @@ class SessionIntegrationTest {
         mvc.perform(get("/api/v1/auth/session").cookie(cookie))
                 .andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store"))
                 .andExpect(jsonPath("$.data.user.id").value("101"))
+                .andExpect(jsonPath("$.data.user.universityName").value("한국외국어대학교"))
                 .andExpect(jsonPath("$.data.user.role").value("STUDENT"))
                 .andExpect(jsonPath("$.data.expiresAt").isNotEmpty())
                 .andExpect(jsonPath("$.data.csrfToken").isNotEmpty())

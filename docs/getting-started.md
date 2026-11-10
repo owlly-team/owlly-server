@@ -101,5 +101,19 @@ java -jar build/libs/owlly-0.0.1-SNAPSHOT.jar
 - 인증은 Spring Security + Spring Session JDBC의 서버 세션 방식입니다. 상세 연결 방법은 [세션 인증](auth-session.md)을 참고하세요.
 - 기존 `.env`에는 `.env.example`의 세션 설정도 추가하세요. localhost HTTP 개발은 `SESSION_COOKIE_SECURE=false`, 운영 HTTPS는 `true`를 사용합니다.
 - 이메일 인증 POST에도 허용된 `Origin` 헤더가 필요합니다. Swagger에서는 `http://localhost:8080`, 프런트에서는 자신의 Origin을 `ALLOWED_ORIGINS`에 포함하세요. curl/Postman은 `Origin: http://localhost:8080`을 직접 추가합니다.
-- 대학·프로필 선택값·공개 인증·Swagger·health 이외의 경로는 인증이 필요합니다. 거점 조회는 학생 권한이 필요하며, 실제 가입·로그인은 후속 구현입니다.
+- 대학·프로필 선택값·공개 인증·Swagger·health 이외의 경로는 인증이 필요합니다. 학생 가입·자동 로그인 로직은 구현했지만 공통 행정동 판별 서비스 연결 전에는 가입이 503으로 보류됩니다. 기존 학생 재로그인은 후속 구현입니다.
 - `SessionIntegrationTest`는 H2 기반 JDBC 세션 통합 테스트입니다. 기존 `OwllyApplicationTests.contextLoads`는 실제 PostgreSQL과 `.env` 설정이 필요합니다.
+
+## 학생 가입 테스트
+
+**현재 API-02는 완료, API-07은 공통 행정동 판별 서비스 연결 대기입니다.** 실제 구현이 없으면 앱은 기동되지만 올바른 가입 요청에도 `503 POLICY_NOT_CONFIGURED`를 반환합니다. 테스트에서는 연결 지점만 mock으로 대체합니다.
+
+1. 공통 지역 서비스 담당과 실제 메서드·응답을 맞춘 뒤 `DropoffLocationService` 구현 Bean을 추가해 기존 공통 서비스를 위임 호출합니다. 카카오 호출과 기준정보 매핑을 가입 브랜치에서 중복 구현하지 않습니다.
+2. 구현은 `resolveDong(latitude, longitude)`에서 DB에 존재하는 `AdministrativeArea`(ID 필수, level=DONG)를 반환해야 합니다. 이 계약은 가입 측에서 제안한 연결 규격이며 공통 서비스가 이미 이 인터페이스를 구현했다는 뜻이 아닙니다. 외부 API 키·DB 기준정보 설정은 실제 공통 구현의 안내를 따릅니다.
+3. Swagger에서 대학 조회 → 이메일 발급(202) → 코드 검증(200) → 증표로 가입(201)을 진행합니다. 각 명령에 서로 다른 UUID `Idempotency-Key`를 사용합니다. 가입 재시도만 같은 키와 본문을 유지합니다.
+4. `GET /api/v1/profile-options`의 코드 `FEMALE`/`MALE`를 사용합니다. 이름은 2~20자이며 `sameGenderDefault`는 `true`/`false` 모두 허용합니다. 선택한 값을 저장하고, 생략/null이면 true로 처리합니다. 선택값 조회 응답의 true는 초기 기본값입니다.
+5. 가입 응답의 `data.csrfToken`과 `owlly_session` 쿠키로 세션 조회·보호 API·로그아웃을 확인합니다. Swagger에 CSRF 헤더 입력란이 없는 경우 Postman/curl에서 `X-CSRF-Token`과 쿠키를 전달합니다. 로그아웃 후 세션 조회는 401입니다.
+
+가입과 현재 세션 조회 응답의 `data.user`에 `universityName`을 추가했습니다. 하차 동 이름을 반환하는 프로필 조회·수정 API는 후속 브랜치에서 구현합니다.
+
+`StudentRegistrationIntegrationTest`는 실제 PostgreSQL을 사용하며 공통 행정동 판별 계약만 mock으로 대체합니다. 테스트별 무작위 이메일·행정동을 만들고 종료 시 그 데이터와 세션만 정리합니다. 미연결 시 503·증표 소비 롤백·계정/세션 미생성을 검증합니다. 성공 시나리오 테스트 통과는 실제 공통 연동 완료를 뜻하지 않습니다. `.env`에 실제 DB/암호화 키 설정이 필요하고, 주석은 `//`가 아닌 `#`로 작성합니다.

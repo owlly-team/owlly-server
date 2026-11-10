@@ -217,10 +217,10 @@ public class EmailVerificationService {
         if (v.getGrantExpiresAt() == null || !now.isBefore(v.getGrantExpiresAt()))
             throw new OwllyException(ErrorCode.VERIFICATION_EXPIRED);
         v.consumeGrant(now);
-        return new VerifiedEmail(v.getUniversityId(), v.getEmail());
+        return new VerifiedEmail(v.getUniversityId(), v.getEmail(), v.getConsumedAt(), v.getGrantExpiresAt());
     }
 
-    public record VerifiedEmail(Long universityId, String email) {}
+    public record VerifiedEmail(Long universityId, String email, Instant verifiedAt, Instant grantExpiresAt) {}
 
     private String token(EmailVerification v, String key) { return mac("token:" + v.getId() + ":" + key); }
     private EmailVerificationResponse response(EmailVerification v) {

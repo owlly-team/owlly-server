@@ -47,6 +47,7 @@ User:
     {
       "id": "string",
       "universityId": "string",
+      "universityName": "string",
       "email": "string",
       "role": "STUDENT | STAFF",
       "status": "ACTIVE | SUSPENDED | WITHDRAWN"
