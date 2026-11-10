@@ -58,7 +58,7 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>막차 후 등록: 결과 안내 = 출발 20분 전, 확정 마감 = 출발 15분 전(방 나가기 마감과 같음).</li>
  * </ul>
  * 막차 정보(GBIS) 연동 전이라 결과 안내 시각이 비어 있으면 막차 후 기준으로 처리한다.
- * 하차 좌표는 복호화해서 읽고, 확인 코드는 암호화해서 저장한다(공통 TextCryptor).
+ * 하차 좌표는 EncryptedValueReader 로 읽고, 확인 코드는 암호화해서 저장한다(공통 TextCryptor).
  */
 @Service
 @RequiredArgsConstructor
@@ -67,7 +67,6 @@ public class MatchingService {
     static final Duration RESULT_DUE_BEFORE_DEPARTURE = Duration.ofMinutes(20);
     static final Duration CONFIRM_DEADLINE_BEFORE_DEPARTURE = Duration.ofMinutes(15);
     static final int FIRST_ROUTE_VERSION = 1;
-    static final String SEED_PLAINTEXT_PREFIX = "TEST:";
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final DateTimeFormatter HH_MM = DateTimeFormatter.ofPattern("HH:mm");
@@ -83,6 +82,7 @@ public class MatchingService {
     private final SettlementEstimateService settlementEstimateService;
     private final NotificationService notificationService;
     private final TextCryptor textCryptor;
+    private final EncryptedValueReader encryptedValueReader;
 
     /** 지금 처리할 그룹(결과 안내 시각이 된 대기 신청이 있는 매칭 키). */
     @Transactional(readOnly = true)
@@ -161,7 +161,7 @@ public class MatchingService {
         GeoPoint origin = new GeoPoint(pickupPoint.getLatitude().doubleValue(), pickupPoint.getLongitude().doubleValue());
         Map<Long, GeoPoint> dropoffByMemberId = new HashMap<>();
         for (PartyMember member : savedMembers) {
-            dropoffByMemberId.put(member.getId(), readDropoff(requestById.get(member.getRequestId())));
+            dropoffByMemberId.put(member.getId(), encryptedValueReader.readDropoff(requestById.get(member.getRequestId())));
         }
         List<PartyMember> dropOrder = orderByNearestDropoff(origin, savedMembers, dropoffByMemberId);
         RouteEstimate route = taxiFareService.estimateRoute(
@@ -213,27 +213,6 @@ public class MatchingService {
             current = dropoffByMemberId.get(next.getId());
         }
         return ordered;
-    }
-
-    /** 신청의 하차 좌표를 복호화해서 읽는다. */
-    private GeoPoint readDropoff(RideRequest request) {
-        try {
-            return new GeoPoint(readCoordinate(request.getDropoffLatEncrypted()),
-                    readCoordinate(request.getDropoffLngEncrypted()));
-        } catch (RuntimeException e) {
-            throw new IllegalStateException("하차 좌표를 읽을 수 없습니다. requestId=" + request.getId(), e);
-        }
-    }
-
-    /**
-     * 저장된 좌표 한 값. 시드·테스트 데이터의 평문 값("TEST:37.2510")은 그대로 읽고, 그 외는 복호화한다.
-     * 동승 신청 API 가 생기면 실제 신청 좌표는 모두 암호화되어 저장된다.
-     */
-    private double readCoordinate(String stored) {
-        if (stored.startsWith(SEED_PLAINTEXT_PREFIX)) {
-            return Double.parseDouble(stored.substring(SEED_PLAINTEXT_PREFIX.length()).trim());
-        }
-        return Double.parseDouble(textCryptor.decrypt(stored));
     }
 
     /** 같은 팟 확인용 4자리 코드(0000~9999)를 암호화한 값. */

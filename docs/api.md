@@ -586,7 +586,7 @@
 
 **요청 본문:** 없음
 
-**처리·검증:** 본인 decision PENDING→ACCEPTED. 확정 마감 전, 계정 정상일 때만 가능. 방 오픈/전원 확정 기준은 정책 설정에 따라 처리하며 v0.2 기준을 임의 채택하지 않음.
+**처리·검증:** 본인 decision PENDING→ACCEPTED. 확정 마감 전, 계정 정상일 때만 가능. 이미 ACCEPTED면 같은 응답. 남은 멤버(PENDING·ACCEPTED)가 전원 확정하면 채팅방을 열고 팟을 PREPAYING으로 변경(화면정의서 v0.3 S-05). 확정 마감이 되면 확정한 사람끼리 방을 여는 처리는 서버 내부 작업(확정 마감 처리)이 담당.
 
 **업무 오류:** `409 CONFIRMATION_DEADLINE_PASSED`, `409 INVALID_STATE`, `503 POLICY_NOT_CONFIGURED`
 
@@ -600,7 +600,7 @@
 
 **요청 본문:** 없음
 
-**처리·검증:** 출발 15분 전까지만 허용하는 원본 규칙 적용. 경계는 제안으로 now <= departureAt-15m. PENDING이면 DECLINED, ACCEPTED이면 LEFT. 관련 신청은 CANCELLED로 종료. 이탈로 구성 변경 시 경로·예상금액 재계산. SENT/RECEIVED 금액이나 대표 교체가 얽히면 정책 확정 전 자동 처리 금지.
+**처리·검증:** 출발 15분 전까지만 허용(now <= departureAt-15m). PENDING이면 DECLINED, ACCEPTED이면 LEFT. 관련 신청은 CANCELLED로 종료. 이미 빠졌으면 같은 응답. 본인이 보냈거나 받은 SENT/RECEIVED 송금이 있으면 자동 처리 금지(409 FUNDS_ALREADY_IN_FLIGHT). 대표가 빠지거나 남은 인원이 1명이면 팟 해산(CANCELLED), 남은 사람 신청은 FAILED로 바꾸고 매칭 실패 알림(대표 승계 없음, 기획 답변·화면정의서 v0.3 S-05). 2명 이상 남으면 기존 하차 순서에서 빠진 사람만 지워 경로를 재계산하고 route_version 증가(대표 유지). 예상금액 재계산은 정산 쪽 예상 정산 구현 후 연결.
 
 **업무 오류:** `409 CANCELLATION_DEADLINE_PASSED`, `409 FUNDS_ALREADY_IN_FLIGHT`, `503 POLICY_NOT_CONFIGURED`
 
@@ -614,11 +614,11 @@
 
 **요청 본문:** 없음
 
-**처리·검증:** 유효 일반 멤버 전원의 PREPAY가 RECEIVED여야 함. 대표만 taxi_called_at을 한 번 기록. 외부 택시 호출 API를 실행하거나 호출 사실을 자동 검증하지 않음.
+**처리·검증:** 대표만 가능(대표가 아닌 참여자는 403 FORBIDDEN). 팟이 PREPAYING일 때만 가능(아니면 409 INVALID_STATE). taxi_called_at을 한 번 기록하고 팟을 READY로 변경, 이미 기록했으면 같은 응답. 확정한 일반 멤버에게 알림. 선송금 수령 여부는 확인하지 않음(입금 확인은 대표가 은행 앱에서 직접, 기획 답변 5·화면정의서 v0.3 S-06 대표 · 받을 금액 확인). 외부 택시 호출 API를 실행하거나 호출 사실을 자동 검증하지 않음. 채팅방 "택시를 불렀어요" 시스템 메시지는 채팅 쪽에서 추가 예정.
 
-**업무 오류:** `409 PREPAY_NOT_COMPLETED`, `409 INVALID_STATE`
+**업무 오류:** `403 FORBIDDEN`, `409 INVALID_STATE`
 
-**ERD 연결:** `ride_parties`, `settlement_items`, `transfers`
+**ERD 연결:** `ride_parties`, `notifications`
 
 ### API-26 · POST /parties/{partyId}/boarding · 본인 탑승·미탑승 기록
 
@@ -634,7 +634,7 @@
 }
 ```
 
-**처리·검증:** 본인 참여가 ACCEPTED이고 집결 단계일 때만 기록. BOARDED면 journey.outcome=POOL_BOARDED. MISSED는 사실만 기록하며 자동 전액 환급·제재를 실행하지 않음. 한 번 확인한 값을 다른 값으로 변경하려면 운영 정정 정책 필요. BOARDED가 기록되면 팟을 RIDING으로 전환할 수 있지만 실제 정산은 하차 후 대표 동작으로 진행한다.
+**처리·검증:** 본인 참여가 ACCEPTED이고, 팟이 PREPAYING/READY/RIDING이고, 탑승 확인 시간(출발 15분 전부터 출발 1시간 뒤까지, 화면정의서 v0.3 S-06)일 때만 기록. 아니면 409 BOARDING_NOT_ALLOWED. BOARDED면 journey.outcome=POOL_BOARDED(outcomeSource=BOARDING_CONFIRMATION)이고 팟을 RIDING으로 전환. MISSED는 사실만 기록하며 자동 전액 환급·제재를 실행하지 않음(정산은 전원 탄 것으로 계산, 기획 답변). 같은 값 재전송은 같은 응답, 다른 값으로 변경은 409 BOARDING_ALREADY_RECORDED. 실제 정산은 하차 후 대표 동작으로 진행한다.
 
 **업무 오류:** `409 BOARDING_NOT_ALLOWED`, `409 BOARDING_ALREADY_RECORDED`, `503 POLICY_NOT_CONFIGURED`
 
@@ -1350,13 +1350,14 @@
 | `status` | string | 예 | 팟 상태; FORMING / CONFIRMING / PREPAYING / READY / RIDING / SETTLING / COMPLETED / CANCELLED |
 | `pickupPoint` | PickupPoint | 예 | 해당 DTO 참조 |
 | `departureAt` | string (date-time) | 예 | 출발 |
+| `confirmDeadlineAt` | string (date-time) / null | 예 | 확정 마감; 막차 전 등록은 막차 타러 출발해야 할 시각, 막차 후 등록은 출발 15분 전. 홈 카드·매칭 결과의 "{HH:MM}까지 확정해 주세요"·남은 시간 |
 | `representativeMemberId` | string / null | 예 | 대표 참여 ID |
 | `myMemberId` | string | 예 | 현재 사용자 참여 ID; 형식: `^[1-9][0-9]*$` |
 | `members` | PartyMember[] | 예 | 개인정보를 제한한 멤버 |
 | `routeVersion` | integer | 예 | 경로 버전; 최소 1 |
 | `taxiCalledAt` | string (date-time) / null | 예 | 대표의 외부 호출 확인 |
 | `roomId` | string / null | 예 | 접근 가능한 방 |
-| `allowedActions` | string[] | 예 | 서버가 계산한 현재 가능한 동작 |
+| `allowedActions` | string[] | 예 | 서버가 계산한 지금 누를 수 있는 버튼; CONFIRM(확정 마감 전·결정 전) / LEAVE(출발 15분 전까지) / CONFIRM_TAXI_CALL(대표, PREPAYING, 미기록) / RECORD_BOARDING(확정 멤버, 출발 15분 전~출발 1시간 뒤, 미기록) |
 
 ### BoardingRequest
 
