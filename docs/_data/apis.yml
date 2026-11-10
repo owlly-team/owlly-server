@@ -333,7 +333,7 @@ sections:
         auth: 해당 팟 대표 (REPRESENTATIVE) · Idempotency-Key · If-Match 필수
         success: "200 · data = Party"
         req: 없음
-        errors: ["409 PREPAY_NOT_COMPLETED", "409 INVALID_STATE"]
+        errors: ["403 FORBIDDEN", "409 INVALID_STATE"]
       - id: API-26
         method: POST
         path: /parties/{id}/boarding

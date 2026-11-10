@@ -88,6 +88,15 @@ public class RideParty extends BaseTimeEntity {
     }
 
     /**
+     * 대표가 외부 택시 앱으로 택시를 불렀다고 기록하고 출발 대기 단계로 넘어간다(PREPAYING → READY).
+     * 예) 선송금을 모두 받은 대표가 "택시 불렀어요"를 누를 때. 실제 호출 API 연동이나 호출 사실 검증은 하지 않는다.
+     */
+    public void markTaxiCalled(Instant now) {
+        this.taxiCalledAt = now;
+        this.status = PartyStatus.READY;
+    }
+
+    /**
      * 택시를 타고 이동 중인 단계로 넘어간다(→ RIDING).
      * 예) 팟에서 처음으로 누군가 "탔어요"를 눌렀을 때. 실제 정산은 하차 후 대표가 요금을 입력하면서 시작한다.
      */

@@ -3,8 +3,6 @@ package com.yongyong.owlly.domain.party.dto;
 /**
  * 팟 조회 응답의 allowedActions 값. 지금 이 학생이 누를 수 있는 버튼이다.
  * 프론트는 목록에 있는 버튼만 켜고, 없는 버튼은 비활성으로 보여 준다.
- *
- * <p>대표의 택시 호출 확인 버튼은 해당 API를 만들 때 값을 추가한다.
  */
 public enum PartyAction {
 
@@ -13,6 +11,9 @@ public enum PartyAction {
 
     /** "빠지기" → 팟 거절·이탈 (API-24). */
     LEAVE,
+
+    /** 대표의 "택시를 불렀어요" → 대표의 외부 택시 호출 확인 (API-25). */
+    CONFIRM_TAXI_CALL,
 
     /** 채팅방 탑승 확인의 "탔어요"·"못 탔어요" → 본인 탑승·미탑승 기록 (API-26). */
     RECORD_BOARDING

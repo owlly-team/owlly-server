@@ -614,11 +614,11 @@
 
 **요청 본문:** 없음
 
-**처리·검증:** 유효 일반 멤버 전원의 PREPAY가 RECEIVED여야 함. 대표만 taxi_called_at을 한 번 기록. 외부 택시 호출 API를 실행하거나 호출 사실을 자동 검증하지 않음.
+**처리·검증:** 대표만 가능(대표가 아닌 참여자는 403 FORBIDDEN). 팟이 PREPAYING일 때만 가능(아니면 409 INVALID_STATE). taxi_called_at을 한 번 기록하고 팟을 READY로 변경, 이미 기록했으면 같은 응답. 확정한 일반 멤버에게 알림. 선송금 수령 여부는 확인하지 않음(입금 확인은 대표가 은행 앱에서 직접, 기획 답변 5·화면정의서 v0.3 S-06 대표 · 받을 금액 확인). 외부 택시 호출 API를 실행하거나 호출 사실을 자동 검증하지 않음. 채팅방 "택시를 불렀어요" 시스템 메시지는 채팅 쪽에서 추가 예정.
 
-**업무 오류:** `409 PREPAY_NOT_COMPLETED`, `409 INVALID_STATE`
+**업무 오류:** `403 FORBIDDEN`, `409 INVALID_STATE`
 
-**ERD 연결:** `ride_parties`, `settlement_items`, `transfers`
+**ERD 연결:** `ride_parties`, `notifications`
 
 ### API-26 · POST /parties/{partyId}/boarding · 본인 탑승·미탑승 기록
 
@@ -1357,7 +1357,7 @@
 | `routeVersion` | integer | 예 | 경로 버전; 최소 1 |
 | `taxiCalledAt` | string (date-time) / null | 예 | 대표의 외부 호출 확인 |
 | `roomId` | string / null | 예 | 접근 가능한 방 |
-| `allowedActions` | string[] | 예 | 서버가 계산한 지금 누를 수 있는 버튼; CONFIRM(확정 마감 전·결정 전) / LEAVE(출발 15분 전까지) / RECORD_BOARDING(확정 멤버, 출발 15분 전~출발 1시간 뒤, 미기록). 택시 호출 확인은 해당 API 구현 때 추가 |
+| `allowedActions` | string[] | 예 | 서버가 계산한 지금 누를 수 있는 버튼; CONFIRM(확정 마감 전·결정 전) / LEAVE(출발 15분 전까지) / CONFIRM_TAXI_CALL(대표, PREPAYING, 미기록) / RECORD_BOARDING(확정 멤버, 출발 15분 전~출발 1시간 뒤, 미기록) |
 
 ### BoardingRequest
 

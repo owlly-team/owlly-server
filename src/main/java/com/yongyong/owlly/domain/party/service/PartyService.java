@@ -131,7 +131,8 @@ public class PartyService {
                 party.getRouteVersion(),
                 party.getTaxiCalledAt(),
                 roomId,
-                allowedActions(party, me.decision(), me.boardingStatus(), now));
+                allowedActions(party, me.decision(), me.boardingStatus(), now,
+                        Objects.equals(me.memberId(), party.getRepresentativeMemberId())));
     }
 
     /**
@@ -294,6 +295,52 @@ public class PartyService {
     }
 
     /**
+     * 대표의 외부 택시 호출 확인 (API-25). 화면정의서 S-06 대표 · 받을 금액 확인의 ④ "택시를 불렀어요".
+     * - 대표만 누를 수 있다. 대표가 아닌 참여자는 403 FORBIDDEN
+     * - 이미 눌렀으면 같은 응답(호출 시각은 한 번만 기록)
+     * - 선송금 단계(PREPAYING) 팟이 아니면 409 INVALID_STATE
+     * - 호출 시각을 기록하고 팟을 출발 대기(READY)로 바꾼 뒤, 남은 멤버에게 알린다(화면정의서 ④ "멤버에게 알림")
+     * - 선송금을 받았는지는 확인하지 않는다. 입금 확인은 대표가 은행 앱에서 직접 한다
+     *   (기획 답변 5 "송금 확인을 앱에서 하지 않는 구조", 화면정의서 S-06 대표 · 받을 금액 확인 정책)
+     * 실제 택시 호출이나 호출 사실 검증은 하지 않는다(api.md).
+     */
+    @Transactional
+    public PartyResponse confirmTaxiCall(Long userId, Long partyId, Instant now) {
+        RideParty party = ridePartyRepository.findByIdForUpdate(partyId)
+                .orElseThrow(() -> new OwllyException(ErrorCode.RESOURCE_NOT_FOUND));
+        List<PartyMemberRow> rows = partyMemberRepository.findRowsByPartyId(partyId);
+        PartyMemberRow me = rows.stream()
+                .filter(row -> row.userId().equals(userId))
+                .findFirst()
+                .orElseThrow(() -> new OwllyException(ErrorCode.RESOURCE_NOT_FOUND));
+
+        if (!me.memberId().equals(party.getRepresentativeMemberId())) {
+            throw new OwllyException(ErrorCode.FORBIDDEN);
+        }
+        if (party.getTaxiCalledAt() != null) {
+            return getParty(userId, partyId, now);
+        }
+        if (party.getStatus() != PartyStatus.PREPAYING) {
+            throw new OwllyException(ErrorCode.INVALID_STATE);
+        }
+
+        party.markTaxiCalled(now);
+        rows.stream()
+                .filter(row -> row.decision() == MemberDecision.ACCEPTED)
+                .filter(row -> !row.memberId().equals(party.getRepresentativeMemberId()))
+                .forEach(row -> notificationService.send(new NotificationMessage(
+                        row.userId(),
+                        party.getId(),
+                        NotificationType.SYSTEM,
+                        "taxi-called:member:" + row.memberId(),
+                        "대표가 택시를 불렀어요",
+                        "타면 채팅방에서 탔어요를 눌러 주세요",
+                        "/parties/" + party.getId() + "/room",
+                        null)));
+        return getParty(userId, partyId, now);
+    }
+
+    /**
      * 본인 탑승·미탑승 기록 (API-26). 채팅방 탑승 확인의 "탔어요"·"못 탔어요".
      * - 확정한 멤버가 탑승 확인 시간 안에만 기록할 수 있고, 아니면 409 BOARDING_NOT_ALLOWED
      * - 같은 값을 다시 보내면 같은 응답, 다른 값으로 바꾸려 하면 409 BOARDING_ALREADY_RECORDED
@@ -341,11 +388,15 @@ public class PartyService {
      *   <li>CONFIRM: 확정 대기 중인 팟에서 내가 아직 결정 전(PENDING)이고 확정 마감 전.
      *       마감이 지나면 빠져서 화면은 "확정 시간이 지났어요"를 보여 준다.</li>
      *   <li>LEAVE: 내가 결정 전이거나 확정했고, 택시를 타기 전 팟이고, 출발 15분 전까지.</li>
+     *   <li>CONFIRM_TAXI_CALL: 내가 대표이고, 선송금 단계 팟에서 아직 택시 호출을 기록하지 않았을 때.</li>
      *   <li>RECORD_BOARDING: 내가 확정했고 아직 탑승 여부를 기록하지 않았고, 탑승 확인 시간 안(화면정의서 S-06).</li>
      * </ul>
+     *
+     * @param amRepresentative 이 화면을 보는 학생이 대표인지
      */
     static List<PartyAction> allowedActions(RideParty party, MemberDecision myDecision,
-                                            BoardingStatus myBoarding, Instant now) {
+                                            BoardingStatus myBoarding, Instant now,
+                                            boolean amRepresentative) {
         List<PartyAction> actions = new ArrayList<>();
 
         if (party.getStatus() == PartyStatus.CONFIRMING
@@ -359,6 +410,12 @@ public class PartyService {
                 && (myDecision == MemberDecision.PENDING || myDecision == MemberDecision.ACCEPTED)
                 && !now.isAfter(leaveDeadline)) {
             actions.add(PartyAction.LEAVE);
+        }
+
+        if (amRepresentative
+                && party.getStatus() == PartyStatus.PREPAYING
+                && party.getTaxiCalledAt() == null) {
+            actions.add(PartyAction.CONFIRM_TAXI_CALL);
         }
 
         if (canRecordBoarding(party, myDecision, now) && myBoarding == BoardingStatus.UNKNOWN) {
