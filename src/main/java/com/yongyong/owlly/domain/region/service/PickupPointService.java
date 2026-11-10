@@ -4,6 +4,7 @@ import com.yongyong.owlly.domain.region.dto.PickupPointResponse;
 import com.yongyong.owlly.domain.region.entity.PickupPoint;
 import com.yongyong.owlly.domain.region.repository.PickupPointRepository;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class PickupPointService {
 
     private final PickupPointRepository pickupPointRepository;
+    private final PlaceNameReader placeNameReader;
 
     /**
      * 출발 후보 거점 목록을 만든다.
@@ -32,6 +34,10 @@ public class PickupPointService {
         List<PickupPoint> points = (universityId == null)
                 ? pickupPointRepository.findByActiveTrueOrderByIdAsc()
                 : pickupPointRepository.findActiveByUniversityIdOrCommon(universityId);
-        return points.stream().map(PickupPointResponse::from).toList();
+        Map<Long, String> universityNames = placeNameReader.universityNames(
+                points.stream().map(PickupPoint::getUniversityId).toList());
+        return points.stream()
+                .map(point -> PickupPointResponse.of(point, universityNames.get(point.getUniversityId())))
+                .toList();
     }
 }

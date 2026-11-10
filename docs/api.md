@@ -1119,6 +1119,7 @@
 | --- | --- | --- | --- |
 | `id` | string | 예 | 고정 거점 ID; 형식: `^[1-9][0-9]*$` |
 | `universityId` | string / null | 예 | 공용이면 NULL |
+| `universityName` | string / null | 예 | 학교 이름; 공용이면 NULL |
 | `name` | string | 예 | 거점명 |
 | `point` | Point | 예 | 해당 DTO 참조 |
 | `meetingNote` | string | 예 | 공개 집결 안내 |
@@ -1279,8 +1280,11 @@
 | --- | --- | --- | --- |
 | `id` | string | 예 | 귀가 ID; 형식: `^[1-9][0-9]*$` |
 | `universityId` | string | 예 | 귀가 당시 학교; 형식: `^[1-9][0-9]*$` |
+| `universityName` | string | 예 | 학교 이름 |
 | `pickupPointId` | string | 예 | 출발 거점; 형식: `^[1-9][0-9]*$` |
+| `pickupPointName` | string | 예 | 출발 거점 이름 |
 | `destinationDongId` | string | 예 | 하차 동; 형식: `^[1-9][0-9]*$` |
+| `destinationDongName` | string | 예 | 하차 동 이름 |
 | `intendedDepartureAt` | string (date-time) | 예 | 귀가 예정 시각 |
 | `outcome` | string | 예 | 현재 결과; UNRESOLVED / POOL_BOARDED / BUS_SELECTED / SOLO_SELECTED / CANCELLED |
 | `outcomeAt` | string (date-time) / null | 예 | 결과 시각 |
@@ -1310,8 +1314,11 @@
 | `id` | string | 예 | 신청 ID; 형식: `^[1-9][0-9]*$` |
 | `journeyId` | string | 예 | 귀가 ID; 형식: `^[1-9][0-9]*$` |
 | `pickupPointId` | string | 예 | 거점; 형식: `^[1-9][0-9]*$` |
+| `pickupPointName` | string | 예 | 거점 이름 |
 | `districtId` | string | 예 | 구 또는 시; 형식: `^[1-9][0-9]*$` |
+| `districtName` | string | 예 | 구 또는 시 이름 |
 | `destinationDongId` | string | 예 | 동; 형식: `^[1-9][0-9]*$` |
+| `destinationDongName` | string | 예 | 동 이름 |
 | `departureAt` | string (date-time) | 예 | 출발 슬롯 |
 | `sameGenderOnly` | boolean | 예 | 동성 조건 |
 | `status` | string | 예 | 신청 상태; WAITING / MATCHED / FAILED / CANCELLED / EXPIRED |
