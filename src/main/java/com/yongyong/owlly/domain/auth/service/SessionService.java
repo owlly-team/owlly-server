@@ -7,6 +7,7 @@ import com.yongyong.owlly.domain.auth.dto.SessionResponse;
 import com.yongyong.owlly.domain.user.entity.User;
 import com.yongyong.owlly.domain.user.entity.UserStatus;
 import com.yongyong.owlly.domain.user.repository.UserRepository;
+import com.yongyong.owlly.domain.university.repository.UniversityRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.time.Instant;
@@ -25,6 +26,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class SessionService {
     private final UserRepository users;
+    private final UniversityRepository universities;
     private final SecurityContextRepository contexts;
     private final SessionAuthenticationStrategy sessionAuthenticationStrategy;
     private final CsrfTokenRepository csrfTokens;
@@ -67,6 +69,8 @@ public class SessionService {
         var session = request.getSession(false);
         if (session == null) throw new OwllyException(ErrorCode.UNAUTHENTICATED);
         Instant expiresAt = Instant.ofEpochMilli(session.getLastAccessedTime()).plusSeconds(session.getMaxInactiveInterval());
-        return new SessionResponse(SessionResponse.CurrentUser.from(user), expiresAt, csrfToken);
+        String universityName = universities.findById(user.getUniversityId())
+                .orElseThrow(() -> new OwllyException(ErrorCode.RESOURCE_NOT_FOUND)).getName();
+        return new SessionResponse(SessionResponse.CurrentUser.from(user, universityName), expiresAt, csrfToken);
     }
 }
