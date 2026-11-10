@@ -1350,13 +1350,14 @@
 | `status` | string | 예 | 팟 상태; FORMING / CONFIRMING / PREPAYING / READY / RIDING / SETTLING / COMPLETED / CANCELLED |
 | `pickupPoint` | PickupPoint | 예 | 해당 DTO 참조 |
 | `departureAt` | string (date-time) | 예 | 출발 |
+| `confirmDeadlineAt` | string (date-time) / null | 예 | 확정 마감; 막차 전 등록은 막차 타러 출발해야 할 시각, 막차 후 등록은 출발 15분 전. 홈 카드·매칭 결과의 "{HH:MM}까지 확정해 주세요"·남은 시간 |
 | `representativeMemberId` | string / null | 예 | 대표 참여 ID |
 | `myMemberId` | string | 예 | 현재 사용자 참여 ID; 형식: `^[1-9][0-9]*$` |
 | `members` | PartyMember[] | 예 | 개인정보를 제한한 멤버 |
 | `routeVersion` | integer | 예 | 경로 버전; 최소 1 |
 | `taxiCalledAt` | string (date-time) / null | 예 | 대표의 외부 호출 확인 |
 | `roomId` | string / null | 예 | 접근 가능한 방 |
-| `allowedActions` | string[] | 예 | 서버가 계산한 현재 가능한 동작 |
+| `allowedActions` | string[] | 예 | 서버가 계산한 지금 누를 수 있는 버튼; CONFIRM(확정 마감 전·결정 전) / LEAVE(출발 15분 전까지). 택시 호출 확인·탑승 기록은 해당 API 구현 때 추가 |
 
 ### BoardingRequest
 

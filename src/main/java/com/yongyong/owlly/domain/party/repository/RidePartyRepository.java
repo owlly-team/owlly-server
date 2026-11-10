@@ -3,6 +3,7 @@ package com.yongyong.owlly.domain.party.repository;
 import com.yongyong.owlly.domain.party.entity.RideParty;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -22,6 +23,13 @@ public interface RidePartyRepository extends JpaRepository<RideParty, Long> {
             where b.user_low_id in (:userIds) and b.user_high_id in (:userIds)
             """, nativeQuery = true)
     List<BlockedPair> findBlockedPairs(@Param("userIds") Collection<Long> userIds);
+
+    /**
+     * 팟의 채팅방 번호(팟당 최대 1개). 읽기만 한다. 방은 채팅 쪽에서 연다.
+     * 예) 매칭 결과 화면에서 확정한 학생에게 "채팅방으로 가기"를 보여 줄 때.
+     */
+    @Query("select c.id from ChatRoom c where c.partyId = :partyId")
+    Optional<Long> findRoomIdByPartyId(@Param("partyId") Long partyId);
 
     /** 차단한 두 학생(작은 id, 큰 id). */
     interface BlockedPair {

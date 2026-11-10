@@ -169,6 +169,7 @@ Party:
       "status": "FORMING | CONFIRMING | PREPAYING | READY | RIDING | SETTLING | COMPLETED | CANCELLED",
       "pickupPoint": "PickupPoint",
       "departureAt": "datetime",
+      "confirmDeadlineAt": "datetime | null",
       "representativeMemberId": "string | null",
       "myMemberId": "string",
       "members": "PartyMember[]",
