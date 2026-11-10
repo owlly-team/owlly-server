@@ -1,6 +1,11 @@
 spring:
   application:
     name: owlly
+  session:
+    timeout: ${SESSION_TIMEOUT:30m}
+    jdbc:
+      initialize-schema: ${SESSION_SCHEMA_INIT:always}
+      platform: postgresql
   mail:
     host: ${SPRING_MAIL_HOST:}
     port: ${SPRING_MAIL_PORT:587}
@@ -30,6 +35,10 @@ spring:
     show-sql: true
 
 owlly:
+  session:
+    cookie-secure: ${SESSION_COOKIE_SECURE:true}
+  security:
+    allowed-origins: ${ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,http://localhost:8080}
   verification:
     secret: ${VERIFICATION_SECRET:}
     mail-from: ${MAIL_FROM:}

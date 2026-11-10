@@ -8,7 +8,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.yongyong.owlly.common.response.ApiResponse;
 import com.yongyong.owlly.config.JacksonConfig;
-import com.yongyong.owlly.config.SecurityConfig;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
@@ -16,6 +15,7 @@ import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
@@ -27,9 +27,10 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 공통 응답·오류 형식이 docs/api.md 1절·6절과 일치하는지 확인한다. */
+/** MVC 응답·오류 계약만 검사한다. 보안 필터는 SessionIntegrationTest에서 별도로 검증한다. */
 @WebMvcTest(controllers = GlobalExceptionHandlerTest.TestController.class)
-@Import({JacksonConfig.class, SecurityConfig.class, GlobalExceptionHandlerTest.TestController.class})
+@AutoConfigureMockMvc(addFilters = false)
+@Import({JacksonConfig.class, GlobalExceptionHandlerTest.TestController.class})
 class GlobalExceptionHandlerTest {
 
     @Autowired
