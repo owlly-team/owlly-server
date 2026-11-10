@@ -78,4 +78,45 @@ public class RideParty extends BaseTimeEntity {
         this.representativeMemberId = memberId;
         this.status = PartyStatus.CONFIRMING;
     }
+
+    /**
+     * 확정이 끝나 선송금 단계로 넘어간다(CONFIRMING → PREPAYING).
+     * 예) 남은 멤버가 전원 확정해서 채팅방이 열릴 때. 이후 멤버는 대표에게 선송금을 보낸다.
+     */
+    public void startPrepaying() {
+        this.status = PartyStatus.PREPAYING;
+    }
+
+    /**
+     * 대표가 외부 택시 앱으로 택시를 불렀다고 기록하고 출발 대기 단계로 넘어간다(PREPAYING → READY).
+     * 예) 선송금을 모두 받은 대표가 "택시 불렀어요"를 누를 때. 실제 호출 API 연동이나 호출 사실 검증은 하지 않는다.
+     */
+    public void markTaxiCalled(Instant now) {
+        this.taxiCalledAt = now;
+        this.status = PartyStatus.READY;
+    }
+
+    /**
+     * 택시를 타고 이동 중인 단계로 넘어간다(→ RIDING).
+     * 예) 팟에서 처음으로 누군가 "탔어요"를 눌렀을 때. 실제 정산은 하차 후 대표가 요금을 입력하면서 시작한다.
+     */
+    public void startRiding() {
+        this.status = PartyStatus.RIDING;
+    }
+
+    /**
+     * 하차 순서가 바뀌어 새 경로 버전으로 넘어간다.
+     * 예) 멤버가 빠져 남은 사람끼리 하차 순서·구간 거리를 다시 저장했을 때.
+     */
+    public void changeRoute(int newRouteVersion) {
+        this.routeVersion = newRouteVersion;
+    }
+
+    /**
+     * 팟을 해산한다(→ CANCELLED). 대표 승계는 없다(기획 답변 3).
+     * 예) 대표가 빠지거나, 빠진 사람이 생겨 혼자만 남았을 때.
+     */
+    public void cancel() {
+        this.status = PartyStatus.CANCELLED;
+    }
 }

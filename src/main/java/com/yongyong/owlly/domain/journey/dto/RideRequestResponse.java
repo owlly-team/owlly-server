@@ -10,15 +10,19 @@ import java.time.Instant;
  * <p>홈의 매칭 대기 카드가 이 값으로 다음 화면을 정한다.
  * 예) WAITING → 계속 대기 카드, MATCHED → partyId 로 매칭 결과 화면, FAILED → 매칭 실패·대안 화면.
  *
- * <p>하차 좌표와 성별 스냅샷은 학생 화면에 필요 없는 개인정보라 담지 않는다.
+ * <p>id 마다 이름을 같이 보낸다. 프론트는 id 만으로 화면에 이름을 띄울 수 없기 때문이다.
+ * 하차 좌표와 성별 스냅샷은 학생 화면에 필요 없는 개인정보라 담지 않는다.
  * ID 는 Long 이지만 JacksonConfig 에 의해 JSON 에서는 문자열로 나간다.
  */
 public record RideRequestResponse(
         Long id,                   // 신청 번호. 홈의 activeRequestId 로 이 신청을 조회한다
         Long journeyId,            // 이 신청이 속한 귀가 번호
         Long pickupPointId,        // 이번 신청의 출발 거점
+        String pickupPointName,    // 출발 거점 이름. 예) "단국대 정문 거점"
         Long districtId,           // 같은 방향 매칭 권역(구, 구가 없으면 시)
+        String districtName,       // 권역 이름. 예) "영통구"
         Long destinationDongId,    // 하차 행정동
+        String destinationDongName, // 하차 행정동 이름. 예) "영통2동"
         Instant departureAt,       // 30분 단위 출발 시각
         boolean sameGenderOnly,    // 동성끼리만 매칭할지
         RideRequestStatus status,  // WAITING / MATCHED / FAILED / CANCELLED / EXPIRED
@@ -27,13 +31,22 @@ public record RideRequestResponse(
         Instant createdAt          // 등록 시각(먼저 등록한 순서의 기준)
 ) {
 
-    public static RideRequestResponse of(RideRequest request, Long partyId) {
+    /**
+     * @param pickupPointName     출발 거점 이름
+     * @param districtName        권역(구·시) 이름
+     * @param destinationDongName 하차 행정동 이름
+     */
+    public static RideRequestResponse of(RideRequest request, Long partyId, String pickupPointName,
+                                         String districtName, String destinationDongName) {
         return new RideRequestResponse(
                 request.getId(),
                 request.getJourneyId(),
                 request.getPickupPointId(),
+                pickupPointName,
                 request.getDistrictId(),
+                districtName,
                 request.getDestinationDongId(),
+                destinationDongName,
                 request.getDepartureAt(),
                 request.isSameGenderOnly(),
                 request.getStatus(),

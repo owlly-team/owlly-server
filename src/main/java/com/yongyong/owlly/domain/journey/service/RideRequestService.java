@@ -9,6 +9,9 @@ import com.yongyong.owlly.domain.journey.repository.JourneyRepository;
 import com.yongyong.owlly.domain.journey.repository.RideRequestRepository;
 import com.yongyong.owlly.domain.party.entity.PartyMember;
 import com.yongyong.owlly.domain.party.repository.PartyMemberRepository;
+import com.yongyong.owlly.domain.region.service.PlaceNameReader;
+import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +30,7 @@ public class RideRequestService {
     private final RideRequestRepository rideRequestRepository;
     private final JourneyRepository journeyRepository;
     private final PartyMemberRepository partyMemberRepository;
+    private final PlaceNameReader placeNameReader;
 
     /**
      * 신청·매칭 결과 조회 (API-20). 본인 신청만 볼 수 있다.
@@ -45,7 +49,7 @@ public class RideRequestService {
                         .orElse(null)
                 : null;
 
-        return RideRequestResponse.of(request, partyId);
+        return toResponse(request, partyId);
     }
 
     /**
@@ -68,7 +72,17 @@ public class RideRequestService {
             case MATCHED -> throw new OwllyException(ErrorCode.REQUEST_ALREADY_MATCHED);
             case FAILED, EXPIRED -> throw new OwllyException(ErrorCode.INVALID_STATE);
         }
-        return RideRequestResponse.of(request, null);
+        return toResponse(request, null);
+    }
+
+    /** 신청 응답에 거점·권역·하차 동 이름을 붙인다. */
+    private RideRequestResponse toResponse(RideRequest request, Long partyId) {
+        Map<Long, String> areaNames = placeNameReader.areaNames(
+                List.of(request.getDistrictId(), request.getDestinationDongId()));
+        return RideRequestResponse.of(request, partyId,
+                placeNameReader.pickupPointNames(List.of(request.getPickupPointId())).get(request.getPickupPointId()),
+                areaNames.get(request.getDistrictId()),
+                areaNames.get(request.getDestinationDongId()));
     }
 
     /** 신청 → 귀가 → 학생으로 이어서 본인 것인지 확인한다(신청에는 학생 id 가 없다). */

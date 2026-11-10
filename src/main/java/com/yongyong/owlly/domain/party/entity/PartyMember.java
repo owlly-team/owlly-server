@@ -56,4 +56,36 @@ public class PartyMember extends BaseTimeEntity {
 
     @Column(name = "boarded_at")
     private Instant boardedAt;
+
+    /**
+     * 이 팟으로 가기로 확정한다(PENDING → ACCEPTED).
+     * 예) 매칭 결과 화면에서 "이 팟 확정하기"를 누를 때. 마감·상태 확인은 서비스에서 먼저 한다.
+     */
+    public void confirm(Instant now) {
+        this.decision = MemberDecision.ACCEPTED;
+        this.confirmedAt = now;
+    }
+
+    /**
+     * 팟에서 빠진다. 확정 전이면 거절(DECLINED), 확정 뒤면 이탈(LEFT).
+     * 예) 매칭 결과 화면이나 채팅방에서 "빠지기"를 누를 때. 마감·송금 확인은 서비스에서 먼저 한다.
+     */
+    public void leave(Instant now) {
+        this.decision = (decision == MemberDecision.ACCEPTED) ? MemberDecision.LEFT : MemberDecision.DECLINED;
+        this.leftAt = now;
+    }
+
+    /**
+     * 택시를 탔는지 기록한다(UNKNOWN → BOARDED 또는 MISSED).
+     * 예) 채팅방 탑승 확인에서 "탔어요"·"못 탔어요"를 누를 때. 못 탔어요는 기록만 한다(기획 답변 2).
+     */
+    public void recordBoarding(BoardingStatus status, Instant now) {
+        this.boardingStatus = status;
+        this.boardedAt = now;
+    }
+
+    /** 아직 팟에 남아 있는 참여자인지(결정 전이거나 확정). 거절·이탈·미입금 제외는 빠진 사람이다. */
+    public boolean isActive() {
+        return decision == MemberDecision.PENDING || decision == MemberDecision.ACCEPTED;
+    }
 }

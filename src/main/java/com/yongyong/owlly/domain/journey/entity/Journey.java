@@ -66,4 +66,14 @@ public class Journey extends BaseTimeEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "outcome_source", length = 30)
     private OutcomeSource outcomeSource;
+
+    /**
+     * 동승으로 귀가했다고 기록한다(→ POOL_BOARDED, 출처 BOARDING_CONFIRMATION).
+     * 예) 채팅방에서 "탔어요"를 눌렀을 때. 학생이 귀가 선택 화면에서 직접 고를 수는 없다(api.md API-17).
+     */
+    public void markPoolBoarded(Instant now) {
+        this.outcome = JourneyOutcome.POOL_BOARDED;
+        this.outcomeAt = now;
+        this.outcomeSource = OutcomeSource.BOARDING_CONFIRMATION;
+    }
 }
