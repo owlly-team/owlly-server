@@ -302,7 +302,9 @@ sections:
         method: GET
         path: /parties/{id}
         desc: 팟·멤버·대표·다음 행동 조회
-        status: 시작 전
+        status: 대기
+        waitingFor: 인증
+        waitingNote: 서비스 로직은 develop 에 머지됨. 로그인 기능이 붙으면 컨트롤러만 연결
         auth: 해당 팟 참여자 (PARTY_MEMBER) · ETag
         success: "200 · data = Party"
         req: 없음
@@ -311,7 +313,9 @@ sections:
         method: POST
         path: /parties/{id}/confirm
         desc: 본인 팟 확정
-        status: 시작 전
+        status: 대기
+        waitingFor: 인증
+        waitingNote: 서비스 로직은 develop 에 머지됨. 로그인 기능이 붙으면 컨트롤러만 연결. 채팅방 열기는 채팅 쪽 ChatRoomService.openRoom 껍데기 호출 (나연님이 채울 예정)
         auth: 해당 팟 참여자 (PARTY_MEMBER) · Idempotency-Key · If-Match 필수
         success: "200 · data = Party"
         req: 없음
@@ -320,7 +324,9 @@ sections:
         method: POST
         path: /parties/{id}/leave
         desc: 팟 거절·이탈
-        status: 시작 전
+        status: 대기
+        waitingFor: 인증·정산
+        waitingNote: 서비스 로직은 develop 에 머지됨. 로그인 기능이 붙으면 컨트롤러 연결. 이탈 후 남은 사람 예상 금액 재계산은 정산 쪽 예상 정산(SettlementEstimateService.createEstimate) 구현 후 연결 (시현님 확인 필요)
         auth: 해당 팟 참여자 (PARTY_MEMBER) · Idempotency-Key · If-Match 필수
         success: "200 · data = Party"
         req: 없음
@@ -329,7 +335,9 @@ sections:
         method: POST
         path: /parties/{id}/taxi-call-confirmation
         desc: 대표의 외부 택시 호출 확인
-        status: 시작 전
+        status: 대기
+        waitingFor: 인증
+        waitingNote: 서비스 로직은 develop 에 머지됨. 로그인 기능이 붙으면 컨트롤러만 연결
         auth: 해당 팟 대표 (REPRESENTATIVE) · Idempotency-Key · If-Match 필수
         success: "200 · data = Party"
         req: 없음
@@ -338,7 +346,9 @@ sections:
         method: POST
         path: /parties/{id}/boarding
         desc: 본인 탑승·미탑승 기록
-        status: 시작 전
+        status: 대기
+        waitingFor: 인증
+        waitingNote: 서비스 로직은 develop 에 머지됨. 로그인 기능이 붙으면 컨트롤러만 연결
         auth: 해당 팟 참여자 (PARTY_MEMBER) · Idempotency-Key 필수
         success: "200 · data = Party"
         req: |
