@@ -9,7 +9,7 @@
 - 역할별 접근 제어, 요청마다 최신 계정 상태·역할 확인
 - CSRF, Origin/CORS 허용 목록, 공통 JSON 401/403 오류
 
-가입·학생 로그인·관계자 로그인 API는 아직 없습니다. 테스트용 로그인 컨트롤러는 테스트 컨텍스트에만 있으며 운영 코드에 포함되지 않습니다.
+학생 가입·자동 로그인 로직은 `feat/student-registration`에서 구현했지만 공통 행정동 판별 서비스 연결 대기 상태입니다. 미연결 시 실제 가입은 503 POLICY_NOT_CONFIGURED입니다. 기존 학생 재로그인·관계자 로그인 API는 후속 구현입니다. 테스트용 로그인 컨트롤러는 테스트 컨텍스트에만 있으며 운영 코드에 포함되지 않습니다.
 
 ## 후속 가입·로그인 연결
 
@@ -37,6 +37,7 @@ Spring Session의 PostgreSQL 스키마는 의존성의 `org/springframework/sess
 - 공개 인증 POST에도 등록된 `Origin`이 필수입니다. 브라우저는 자동 전송하며 curl/Postman은 직접 지정합니다.
 - 로그인 응답 또는 `GET /api/v1/auth/session`의 `data.csrfToken`을 변경 요청의 `X-CSRF-Token` 헤더에 보냅니다. 로그인 후에는 새 토큰을 사용합니다.
 - `GET /auth/session`은 본인 사용자 정보·유휴 만료 시각·CSRF 토큰을 반환하며 세션 ID는 반환하지 않습니다.
+- 가입 및 현재 세션 조회 응답의 `data.user`는 `universityId`와 `universityName`을 함께 제공합니다.
 - 로그아웃은 `DELETE /auth/session`에 UUID `Idempotency-Key`와 로그인 중이면 CSRF 토큰을 보냅니다. 204 응답 후 클라이언트의 사용자·CSRF 상태를 비웁니다. 이미 만료/로그아웃된 요청의 재시도도 204입니다.
 - 401은 세션 없음/만료/계정 삭제·탈퇴입니다. 403 FORBIDDEN은 권한·CSRF·Origin 오류, 403 ACCOUNT_SUSPENDED는 정지 상태입니다.
 
