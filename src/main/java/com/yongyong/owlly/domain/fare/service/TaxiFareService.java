@@ -5,14 +5,12 @@ import com.yongyong.owlly.domain.fare.client.KakaoMobilityClient.KakaoRoute;
 import com.yongyong.owlly.domain.fare.client.KakaoMobilityClient.KakaoRouteException;
 import com.yongyong.owlly.domain.fare.dto.GeoPoint;
 import com.yongyong.owlly.domain.fare.dto.RouteEstimate;
-import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -25,7 +23,8 @@ import org.springframework.stereotype.Service;
  * <p>계산 방법
  * <ul>
  *   <li>카카오모빌리티 실시간 길찾기의 거리·택시 요금·통행료를 쓴다.</li>
- *   <li>카카오 요금의 심야할증은 "호출한 시각" 기준이다. 낮에 불렀는데 출발이 심야면(시연·테스트) 할증률을 직접 곱한다.</li>
+ *   <li>카카오 요금에는 심야할증이 들어 있지 않다(23:50 출발로 길찾기를 해도, 새벽에 지금 출발로 불러도 할증 전 요금이 온다).
+ *       그래서 출발 시각이 심야(23:00~04:00)이면 호출한 시각과 관계없이 할증률을 직접 곱한다.</li>
  *   <li>카카오를 쓸 수 없으면(키 없음, 장애, 쿼터 초과) 용인시 중형택시 요금표로 대신 계산한다.
  *       거리는 직선 거리 × 1.3 으로 어림한다.</li>
  * </ul>
@@ -54,18 +53,11 @@ public class TaxiFareService {
 
     private final KakaoMobilityClient kakaoMobilityClient;
     private final double nightSurchargeRate;
-    private final Clock clock;
 
-    @Autowired
     public TaxiFareService(KakaoMobilityClient kakaoMobilityClient,
                            @Value("${owlly.fare.night-surcharge-rate:0.3}") double nightSurchargeRate) {
-        this(kakaoMobilityClient, nightSurchargeRate, Clock.systemUTC());
-    }
-
-    TaxiFareService(KakaoMobilityClient kakaoMobilityClient, double nightSurchargeRate, Clock clock) {
         this.kakaoMobilityClient = kakaoMobilityClient;
         this.nightSurchargeRate = nightSurchargeRate;
-        this.clock = clock;
     }
 
     /**
@@ -86,11 +78,9 @@ public class TaxiFareService {
     }
 
     private RouteEstimate fromKakao(KakaoRoute route, Instant departureAt) {
-        boolean calledAtNight = isNight(Instant.now(clock));
-        boolean departsAtNight = isNight(departureAt);
         int taxiFare = route.taxiFareWon();
         String source = SOURCE_KAKAO;
-        if (!calledAtNight && departsAtNight) {
+        if (isNight(departureAt)) {
             taxiFare = roundUpToUnit(taxiFare * (1 + nightSurchargeRate));
             source = SOURCE_KAKAO_NIGHT_ADJUSTED;
         }
