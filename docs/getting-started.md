@@ -98,5 +98,8 @@ java -jar build/libs/owlly-0.0.1-SNAPSHOT.jar
 - 강남대학교(`kangnam.ac.kr`), 경희대학교(`khu.ac.kr`), 단국대학교(`dankook.ac.kr`), 명지대학교(`mju.ac.kr`), 한국외국어대학교(`hufs.ac.kr`)와 해당 이메일 도메인은 실행 시 없는 항목만 추가됩니다. 기존 항목의 활성 여부와 소속은 자동으로 변경하지 않습니다.
 - 탈퇴 후 이메일 재가입 정책은 회원가입·탈퇴 구현 시 DB 고유 제약 변경이 필요하며 현재 `users.email`의 단일 UNIQUE는 아직 변경되지 않았습니다.
 
-- 현재 Security는 모든 요청을 `permitAll` 상태 — 인증 로직(JWT)은 도메인 작업 시 추가 예정.
-- 테스트는 실제 PostgreSQL이 떠 있어야 통과(별도 테스트 DB 설정 전까지).
+- 인증은 Spring Security + Spring Session JDBC의 서버 세션 방식입니다. 상세 연결 방법은 [세션 인증](auth-session.md)을 참고하세요.
+- 기존 `.env`에는 `.env.example`의 세션 설정도 추가하세요. localhost HTTP 개발은 `SESSION_COOKIE_SECURE=false`, 운영 HTTPS는 `true`를 사용합니다.
+- 이메일 인증 POST에도 허용된 `Origin` 헤더가 필요합니다. Swagger에서는 `http://localhost:8080`, 프런트에서는 자신의 Origin을 `ALLOWED_ORIGINS`에 포함하세요. curl/Postman은 `Origin: http://localhost:8080`을 직접 추가합니다.
+- 대학·프로필 선택값·공개 인증·Swagger·health 이외의 경로는 인증이 필요합니다. 거점 조회는 학생 권한이 필요하며, 실제 가입·로그인은 후속 구현입니다.
+- `SessionIntegrationTest`는 H2 기반 JDBC 세션 통합 테스트입니다. 기존 `OwllyApplicationTests.contextLoads`는 실제 PostgreSQL과 `.env` 설정이 필요합니다.

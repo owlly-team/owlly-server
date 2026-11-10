@@ -115,7 +115,7 @@ sections:
         method: GET
         path: /auth/session
         desc: 현재 계정·세션 확인
-        status: 시작 전
+        status: 완료
         auth: 로그인 사용자 (AUTHENTICATED)
         success: "200 · data = Session"
         req: 없음
@@ -138,8 +138,8 @@ sections:
         method: DELETE
         path: /auth/session
         desc: 로그아웃
-        status: 시작 전
-        auth: 로그인 사용자 (AUTHENTICATED) · Idempotency-Key 필수
+        status: 완료
+        auth: 로그인 사용자 (AUTHENTICATED) · Idempotency-Key 필수 · 이미 세션이 없는 재시도도 204
         success: "204 · 응답 본문 없음"
         req: 없음
         errors: []
