@@ -43,6 +43,9 @@ public enum ErrorCode {
     // ===== 학생 로그인 =====
     ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "가입된 학생 계정이 없습니다."),
 
+    // ===== 관계자 로그인 =====
+    INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "메일이나 비밀번호가 맞지 않아요."),
+
     // ===== 귀가 (journey) =====
     ACTIVE_JOURNEY_CONFLICT(HttpStatus.CONFLICT, "진행 중인 귀가가 있습니다."),
     ACTIVE_REQUEST_EXISTS(HttpStatus.CONFLICT, "이미 진행 중인 동승 신청이 있습니다."),

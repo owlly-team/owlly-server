@@ -35,6 +35,10 @@ spring:
     show-sql: true
 
 owlly:
+  staff-login:
+    max-failures: ${STAFF_LOGIN_MAX_FAILURES:5}
+    lock-seconds: ${STAFF_LOGIN_LOCK_SECONDS:1800}
+    receipt-ttl-seconds: ${STAFF_LOGIN_RECEIPT_TTL_SECONDS:1800}
   session:
     cookie-secure: ${SESSION_COOKIE_SECURE:true}
   security:
