@@ -2,7 +2,7 @@ spring:
   application:
     name: owlly
   session:
-    timeout: ${SESSION_TIMEOUT:30m}
+    timeout: ${SESSION_TIMEOUT:30d}
     jdbc:
       initialize-schema: ${SESSION_SCHEMA_INIT:always}
       platform: postgresql

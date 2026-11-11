@@ -85,6 +85,7 @@ class SessionIntegrationTest {
     void cookieRestoresJdbcSessionAndResponseHidesSessionId() throws Exception {
         MvcResult login = login(null);
         Cookie cookie = cookie(login);
+        assertThat(cookie.getMaxAge()).isEqualTo(60); // 서버 timeout 오버라이드와 쿠키 수명이 함께 변경됨
         assertThat(login.getResponse().getHeaders("Set-Cookie").toString())
                 .contains("owlly_session=", "HttpOnly", "Secure", "SameSite=Lax");
         assertThat(jdbc.queryForObject("select count(*) from SPRING_SESSION", Integer.class)).isEqualTo(1);
@@ -233,7 +234,7 @@ class SessionIntegrationTest {
         return mapper.readTree(result.getResponse().getContentAsString()).at("/data/csrfToken").asText();
     }
 
-    /** 테스트 컨텍스트에서만 존재. 실제 가입·로그인 API는 후속 브랜치에서 구현한다. */
+    /** 세션 기반만 격리 검증하는 테스트용 진입점. 실제 학생 로그인은 별도 통합 테스트로 검증한다. */
     @RestController
     static class TestEndpoints {
         private final SessionService sessions;
