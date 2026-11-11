@@ -119,6 +119,7 @@ public class PartyService {
                         row.universityName(),
                         row.destinationDongName(),
                         row.genderSnapshot() == me.genderSnapshot(),
+                        row.genderSnapshot(),
                         Objects.equals(row.memberId(), party.getRepresentativeMemberId()),
                         row.decision(),
                         row.boardingStatus(),
@@ -129,6 +130,8 @@ public class PartyService {
                 party.getId(),
                 party.getStatus(),
                 pickupPoint,
+                party.getDistrictId(),
+                placeNameReader.areaNames(Collections.singletonList(party.getDistrictId())).get(party.getDistrictId()),
                 party.getDepartureAt(),
                 confirmDeadline(party),
                 party.getRepresentativeMemberId(),
@@ -182,8 +185,8 @@ public class PartyService {
         boolean everyoneConfirmed = members.stream()
                 .filter(PartyMember::isActive)
                 .allMatch(member -> member.getDecision() == MemberDecision.ACCEPTED);
+        chatRoomService.openRoom(partyId);   // 확정한 사람부터 바로 입장: 전원을 기다리지 않는다(기획 답변 v2 #9). 이미 열려 있으면 그대로 둔다
         if (everyoneConfirmed) {
-            chatRoomService.openRoom(partyId);
             party.startPrepaying();
         }
         return getParty(userId, partyId, now);
@@ -240,7 +243,7 @@ public class PartyService {
         if (representativeLeft || remaining.size() < PartyGrouper.MIN_PARTY_SIZE) {
             disband(party, remaining, requestById, userIdByMemberId, representativeLeft);
         } else {
-            rerouteWithout(party, me, members, requestById, now);
+            rerouteWithout(party, List.of(me), members, requestById, now);
         }
         return getParty(userId, partyId, now);
     }
@@ -269,14 +272,15 @@ public class PartyService {
      * 빠진 사람만 지운 하차 순서로 구간 거리를 다시 받아 새 경로 버전으로 저장한다.
      * 처음부터 다시 정렬하지 않는 이유: 마지막 하차자(대표)가 바뀌면 안 되기 때문이다(대표 승계 없음).
      */
-    private void rerouteWithout(RideParty party, PartyMember leaver, List<PartyMember> members,
+    private void rerouteWithout(RideParty party, List<PartyMember> leavers, List<PartyMember> members,
                                 Map<Long, RideRequest> requestById, Instant now) {
+        Set<Long> leaverIds = leavers.stream().map(PartyMember::getId).collect(Collectors.toSet());
         Map<Long, Long> requestIdByMemberId = members.stream()
                 .collect(Collectors.toMap(PartyMember::getId, PartyMember::getRequestId));
         List<Long> dropOrder = partyStopRepository
                 .findByPartyIdAndRouteVersionOrderByStopOrderAsc(party.getId(), party.getRouteVersion()).stream()
                 .map(PartyStop::getMemberId)
-                .filter(memberId -> !memberId.equals(leaver.getId()))
+                .filter(memberId -> !leaverIds.contains(memberId))
                 .toList();
 
         PickupPoint pickupPoint = pickupPointRepository.findById(party.getPickupPointId())
@@ -302,6 +306,85 @@ public class PartyService {
         }
         partyStopRepository.saveAll(newStops);
         party.changeRoute(newRouteVersion);
+    }
+
+    /**
+     * 확정 마감이 지난 팟 번호들(확정 대기 CONFIRMING 인 팟만). 확정 마감 처리 작업이 1분마다 찾는다.
+     * 확정 마감이 비어 있는 팟은 출발 15분 전을 마감으로 본다(confirmDeadline 과 같은 기준).
+     */
+    public List<Long> findPartyIdsPastConfirmDeadline(Instant now) {
+        return ridePartyRepository.findPartyIdsPastConfirmDeadline(
+                now, now.plus(MatchingService.CONFIRM_DEADLINE_BEFORE_DEPARTURE));
+    }
+
+    /** 확정 마감 때 팟을 어떻게 처리할지. */
+    enum DeadlineOutcome {
+        DISBAND_REPRESENTATIVE_NOT_CONFIRMED,   // 대표가 확정하지 않음 → 해산(대표 승계 없음)
+        DISBAND_TOO_FEW,                        // 확정한 사람이 2명 미만 → 해산
+        CONTINUE_WITH_CONFIRMED                 // 확정한 사람끼리 진행
+    }
+
+    /**
+     * 확정 마감이 지났을 때의 결정(기획 답변 v2 #9, 화면정의서 S-05).
+     * 대표가 확정하지 않았으면 몇 명이 확정했든 해산하고, 대표가 확정했으면 확정한 사람이 2명 이상일 때 진행한다.
+     *
+     * @param confirmedCount 확정(ACCEPTED)한 사람 수. 대표 포함
+     */
+    static DeadlineOutcome decideAtConfirmDeadline(boolean representativeConfirmed, int confirmedCount) {
+        if (!representativeConfirmed) {
+            return DeadlineOutcome.DISBAND_REPRESENTATIVE_NOT_CONFIRMED;
+        }
+        return confirmedCount < PartyGrouper.MIN_PARTY_SIZE
+                ? DeadlineOutcome.DISBAND_TOO_FEW
+                : DeadlineOutcome.CONTINUE_WITH_CONFIRMED;
+    }
+
+    /**
+     * 확정 마감 처리(서버 내부 작업). 마감까지 확정하지 않은 멤버는 팟에서 빠지고(신청은 매칭 실패),
+     * 대표가 확정하지 않았거나 확정한 사람이 2명 미만이면 팟을 해산한다. 그 외에는 확정한 사람끼리 경로를 다시 계산해
+     * 선송금 단계(PREPAYING)로 넘어간다. 확정한 사람은 확정할 때 이미 채팅방에 들어가 있다(API-23).
+     * - 확정 대기(CONFIRMING)가 아니거나 마감 전이면 아무것도 하지 않는다(이미 처리됐거나 전원이 확정한 팟).
+     * - 빠진 멤버에게 따로 알림은 보내지 않는다(화면정의서에 문구가 없다). 해산이면 남은 사람에게 기존 해산 알림을 보낸다.
+     *
+     * @return 이 팟을 처리했으면 true
+     */
+    @Transactional
+    public boolean closeConfirmation(Long partyId, Instant now) {
+        RideParty party = ridePartyRepository.findByIdForUpdate(partyId).orElse(null);
+        if (party == null || party.getStatus() != PartyStatus.CONFIRMING || !now.isAfter(confirmDeadline(party))) {
+            return false;
+        }
+        Map<Long, Long> userIdByMemberId = partyMemberRepository.findRowsByPartyId(partyId).stream()
+                .collect(Collectors.toMap(PartyMemberRow::memberId, PartyMemberRow::userId));
+        List<PartyMember> members = partyMemberRepository.findByPartyIdOrderByIdAsc(partyId);
+        Map<Long, RideRequest> requestById = rideRequestRepository.findAllById(
+                        members.stream().map(PartyMember::getRequestId).toList()).stream()
+                .collect(Collectors.toMap(RideRequest::getId, Function.identity()));
+
+        List<PartyMember> unconfirmed = members.stream()
+                .filter(member -> member.getDecision() == MemberDecision.PENDING)
+                .toList();
+        List<PartyMember> confirmed = members.stream()
+                .filter(member -> member.getDecision() == MemberDecision.ACCEPTED)
+                .toList();
+        boolean representativeConfirmed = confirmed.stream()
+                .anyMatch(member -> member.getId().equals(party.getRepresentativeMemberId()));
+
+        for (PartyMember member : unconfirmed) {      // 마감까지 확정하지 않은 사람은 팟에서 빠진다
+            member.leave(now);
+            requestById.get(member.getRequestId()).fail();
+        }
+        switch (decideAtConfirmDeadline(representativeConfirmed, confirmed.size())) {
+            case DISBAND_REPRESENTATIVE_NOT_CONFIRMED -> disband(party, confirmed, requestById, userIdByMemberId, true);
+            case DISBAND_TOO_FEW -> disband(party, confirmed, requestById, userIdByMemberId, false);
+            case CONTINUE_WITH_CONFIRMED -> {
+                if (!unconfirmed.isEmpty()) {
+                    rerouteWithout(party, unconfirmed, members, requestById, now);
+                }
+                party.startPrepaying();
+            }
+        }
+        return true;
     }
 
     /**
@@ -337,6 +420,7 @@ public class PartyService {
         }
 
         party.markTaxiCalled(now);
+        String representativeName = Masking.holderName(encryptedValueReader.readText(me.realNameEncrypted()));
         rows.stream()
                 .filter(row -> row.decision() == MemberDecision.ACCEPTED)
                 .filter(row -> !row.memberId().equals(party.getRepresentativeMemberId()))
@@ -345,7 +429,7 @@ public class PartyService {
                         party.getId(),
                         NotificationType.SYSTEM,
                         "taxi-called:member:" + row.memberId(),
-                        "대표가 택시를 불렀어요",
+                        representativeName + "님이 택시를 불렀어요",   // 기획 답변 v2 #13: "{대표}님이 택시를 불렀어요"
                         "타면 채팅방에서 탔어요를 눌러 주세요",
                         "/parties/" + party.getId() + "/room",
                         null)));

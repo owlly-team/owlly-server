@@ -2,6 +2,7 @@ package com.yongyong.owlly.domain.party.repository;
 
 import com.yongyong.owlly.domain.party.entity.RideParty;
 import jakarta.persistence.LockModeType;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -33,6 +34,20 @@ public interface RidePartyRepository extends JpaRepository<RideParty, Long> {
             where b.user_low_id in (:userIds) and b.user_high_id in (:userIds)
             """, nativeQuery = true)
     List<BlockedPair> findBlockedPairs(@Param("userIds") Collection<Long> userIds);
+
+    /**
+     * 확정 마감이 지난 확정 대기(CONFIRMING) 팟 번호. 읽기만 한다.
+     * 확정 마감이 비어 있는 팟은 출발 시각이 deadlineLimit(지금 + 15분) 이하이면 마감이 지난 것으로 본다.
+     * 예) 확정 마감 처리 작업이 1분마다 "이제 확정을 닫아야 하는 팟"을 찾을 때.
+     */
+    @Query("""
+            select p.id from RideParty p
+            where p.status = com.yongyong.owlly.domain.party.entity.PartyStatus.CONFIRMING
+              and (p.confirmDeadlineAt <= :now
+                   or (p.confirmDeadlineAt is null and p.departureAt <= :deadlineLimit))
+            order by p.id asc
+            """)
+    List<Long> findPartyIdsPastConfirmDeadline(@Param("now") Instant now, @Param("deadlineLimit") Instant deadlineLimit);
 
     /**
      * 팟의 채팅방 번호(팟당 최대 1개). 읽기만 한다. 방은 채팅 쪽에서 연다.

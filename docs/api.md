@@ -118,7 +118,7 @@
 - `settlements`: 예상 계산 → 선송금 → 실제 요금 대기 → 환급 → 완료. 검토가 필요한 경우 REVIEW_REQUIRED. 확정된 정산/경로는 수정하지 않습니다.
 - `stakeholder_reports`: DRAFT → GENERATING → READY 또는 FAILED. FAILED 재시도는 같은 리포트로 가능하며 READY 결과를 새 계산으로 덮어쓰지 않습니다.
 
-**서버 내부 작업:** 선착순 매칭·팟/하차 순서·예상 정산/개인 항목/PENDING 선송금 생성, 결과 알림, 출발 +5분 미입금 처리, 환급 알림·제재, 보존 만료 삭제, 수요 산출, 파일 생성은 스케줄러/작업 큐 영역입니다. 학생·관계자에게 임의 매칭 확정·추정치 편집·직접 수요 산출 권한을 주는 공개 API는 두지 않았습니다. 미정 정책이 필요한 작업은 설정 확정 전 활성화하지 않습니다.
+**서버 내부 작업:** 선착순 매칭·팟/하차 순서·예상 정산/개인 항목/PENDING 선송금 생성, 결과 알림, 확정 마감 처리(마감까지 확정하지 않은 멤버는 팟에서 빠지고 신청은 FAILED, 대표가 확정하지 않았거나 확정한 사람이 2명 미만이면 팟 해산, 아니면 확정한 사람끼리 경로를 다시 계산해 PREPAYING; 기획 답변 v2 #9), 출발 +5분 미입금 처리, 환급 알림·제재, 보존 만료 삭제, 수요 산출, 파일 생성은 스케줄러/작업 큐 영역입니다. 학생·관계자에게 임의 매칭 확정·추정치 편집·직접 수요 산출 권한을 주는 공개 API는 두지 않았습니다. 미정 정책이 필요한 작업은 설정 확정 전 활성화하지 않습니다.
 
 ## 3. API 목록
 
@@ -596,7 +596,7 @@
 
 **요청 본문:** 없음
 
-**처리·검증:** 본인 decision PENDING→ACCEPTED. 확정 마감 전, 계정 정상일 때만 가능. 이미 ACCEPTED면 같은 응답. 남은 멤버(PENDING·ACCEPTED)가 전원 확정하면 채팅방을 열고 팟을 PREPAYING으로 변경(화면정의서 v0.3 S-05). 확정 마감이 되면 확정한 사람끼리 방을 여는 처리는 서버 내부 작업(확정 마감 처리)이 담당.
+**처리·검증:** 본인 decision PENDING→ACCEPTED. 확정 마감 전, 계정 정상일 때만 가능. 이미 ACCEPTED면 같은 응답. 확정한 사람부터 바로 채팅방에 들어간다: 확정할 때마다 방을 열어 두고(이미 열려 있으면 그대로) 그 멤버가 방에 접근할 수 있게 한다(기획 답변 v2 #9, 화면정의서 v0.3.1 S-05; 대표는 계좌 등록 시점에 입장). 남은 멤버(PENDING·ACCEPTED)가 전원 확정하면 팟을 PREPAYING으로 변경. 확정 마감까지 확정하지 않은 멤버는 팟에서 빠지고 대표가 확정하지 않으면 팟이 해산되는 처리는 서버 내부 작업(확정 마감 처리, 1분마다)이 담당한다. 빠진 멤버의 decision은 DECLINED, 신청은 FAILED이며 따로 알림은 보내지 않는다(화면정의서에 문구 없음). 해산이면 확정한 사람에게 "대표가 빠져서 이번 동승이 취소됐어요"(대표 미확정) 또는 "이번엔 매칭되지 않았어요"(확정 인원 부족) 알림.
 
 **업무 오류:** `409 CONFIRMATION_DEADLINE_PASSED`, `409 INVALID_STATE`, `503 POLICY_NOT_CONFIGURED`
 
@@ -624,7 +624,7 @@
 
 **요청 본문:** 없음
 
-**처리·검증:** 대표만 가능(대표가 아닌 참여자는 403 FORBIDDEN). 팟이 PREPAYING일 때만 가능(아니면 409 INVALID_STATE). taxi_called_at을 한 번 기록하고 팟을 READY로 변경, 이미 기록했으면 같은 응답. 확정한 일반 멤버에게 알림. 선송금 수령 여부는 확인하지 않음(입금 확인은 대표가 은행 앱에서 직접, 기획 답변 5·화면정의서 v0.3 S-06 대표 · 받을 금액 확인). 외부 택시 호출 API를 실행하거나 호출 사실을 자동 검증하지 않음. 채팅방 "택시를 불렀어요" 시스템 메시지는 채팅 쪽에서 추가 예정.
+**처리·검증:** 대표만 가능(대표가 아닌 참여자는 403 FORBIDDEN). 팟이 PREPAYING일 때만 가능(아니면 409 INVALID_STATE). taxi_called_at을 한 번 기록하고 팟을 READY로 변경, 이미 기록했으면 같은 응답. 확정한 일반 멤버에게 알림(제목 "{대표 이름}님이 택시를 불렀어요", 본문 "타면 채팅방에서 탔어요를 눌러 주세요"; 기획 답변 v2 #13). 선송금 수령 여부는 확인하지 않음(입금 확인은 대표가 은행 앱에서 직접, 기획 답변 5·화면정의서 v0.3 S-06 대표 · 받을 금액 확인). 외부 택시 호출 API를 실행하거나 호출 사실을 자동 검증하지 않음. 채팅방 "택시를 불렀어요" 시스템 메시지는 채팅 쪽에서 추가 예정.
 
 **업무 오류:** `403 FORBIDDEN`, `409 INVALID_STATE`
 
@@ -1355,6 +1355,7 @@
 | `universityName` | string | 예 | 학교 |
 | `destinationDongName` | string | 예 | 하차 동만 공개 |
 | `sameGenderAsMe` | boolean | 예 | 본인과 동일 성별 여부 |
+| `gender` | string | 예 | 성별; FEMALE / MALE. 동성 매칭을 끈 사람도 있어 심야에 누구와 타는지 미리 알 수 있게 보여 주는 안전 정보(기획 답변 v2 #12) |
 | `isRepresentative` | boolean | 예 | 대표 여부 |
 | `decision` | string | 예 | 참여 결정; PENDING / ACCEPTED / DECLINED / LEFT / REMOVED_UNPAID |
 | `boardingStatus` | string | 예 | 탑승 확인; UNKNOWN / BOARDED / MISSED |
@@ -1367,6 +1368,8 @@
 | `id` | string | 예 | 팟 ID; 형식: `^[1-9][0-9]*$` |
 | `status` | string | 예 | 팟 상태; FORMING / CONFIRMING / PREPAYING / READY / RIDING / SETTLING / COMPLETED / CANCELLED |
 | `pickupPoint` | PickupPoint | 예 | 해당 DTO 참조 |
+| `districtId` | string | 예 | 같은 방향 매칭 권역(구, 구가 없는 시는 시); 형식: `^[1-9][0-9]*$` |
+| `districtName` | string | 예 | 권역 이름. 홈 동승 진행 중 카드의 "영통구 방향" |
 | `departureAt` | string (date-time) | 예 | 출발 |
 | `confirmDeadlineAt` | string (date-time) / null | 예 | 확정 마감; 막차 전 등록은 막차 타러 출발해야 할 시각, 막차 후 등록은 출발 15분 전. 홈 카드·매칭 결과의 "{HH:MM}까지 확정해 주세요"·남은 시간 |
 | `representativeMemberId` | string / null | 예 | 대표 참여 ID |
