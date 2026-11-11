@@ -570,9 +570,9 @@
 
 **요청 본문:** 없음
 
-**처리·검증:** WAITING→CANCELLED. 이미 CANCELLED면 동일 응답. MATCHED 이후 취소는 party leave로 처리. 매칭 작업과 같은 신청 잠금을 사용하여 이중 배정을 막음.
+**처리·검증:** WAITING→CANCELLED. 출발 15분 전까지만 취소할 수 있고 지났으면 409 `CANCELLATION_DEADLINE_PASSED`(화면정의서 v0.3.1 S-03 "출발 15분 전까지는 언제든 취소할 수 있어요", 방 나가기 마감과 같은 시각). 이미 CANCELLED면 마감이 지난 뒤에도 동일 응답. MATCHED 이후 취소는 party leave로 처리. 매칭 작업과 같은 신청 잠금을 사용하여 이중 배정을 막음.
 
-**업무 오류:** `409 REQUEST_ALREADY_MATCHED`, `409 INVALID_STATE`
+**업무 오류:** `409 REQUEST_ALREADY_MATCHED`, `409 INVALID_STATE`, `409 CANCELLATION_DEADLINE_PASSED`
 
 **ERD 연결:** `ride_requests`
 
