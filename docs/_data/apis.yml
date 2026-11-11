@@ -29,15 +29,6 @@ sections:
         success: "200 · data = ProfileOptions"
         req: 없음
         errors: []
-      - id: API-03
-        method: GET
-        path: /banks
-        desc: 수취 계좌 은행 목록
-        status: 시작 전
-        auth: 학생 (STUDENT)
-        success: "200 · data = Bank[]"
-        req: 없음
-        errors: []
       - id: API-05
         method: POST
         path: /auth/email-verifications
@@ -417,6 +408,15 @@ sections:
   - name: 계좌·정산
     owner: 안시현
     items:
+      - id: API-03
+        method: GET
+        path: /banks
+        desc: 수취 계좌 은행 목록
+        status: 시작 전
+        auth: 학생 (STUDENT)
+        success: "200 · data = Bank[]"
+        req: 없음
+        errors: []
       - id: API-31
         method: PUT
         path: /rooms/{id}/accounts/{purpose}
