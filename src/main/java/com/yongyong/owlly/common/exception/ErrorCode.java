@@ -40,6 +40,9 @@ public enum ErrorCode {
     ACCOUNT_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 가입한 이메일입니다."),
     INVALID_GENDER_CODE(HttpStatus.UNPROCESSABLE_ENTITY, "허용되지 않은 성별 코드입니다."),
 
+    // ===== 학생 로그인 =====
+    ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "가입된 학생 계정이 없습니다."),
+
     // ===== 귀가 (journey) =====
     ACTIVE_JOURNEY_CONFLICT(HttpStatus.CONFLICT, "진행 중인 귀가가 있습니다."),
     ACTIVE_REQUEST_EXISTS(HttpStatus.CONFLICT, "이미 진행 중인 동승 신청이 있습니다."),

@@ -12,6 +12,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.convert.DurationStyle;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -66,13 +67,18 @@ public class SecurityConfig {
     }
 
     @Bean
-    public CookieSerializer cookieSerializer(@Value("${owlly.session.cookie-secure:true}") boolean secure) {
+    public CookieSerializer cookieSerializer(@Value("${owlly.session.cookie-secure:true}") boolean secure,
+                                            @Value("${spring.session.timeout:30d}") String timeout) {
         var serializer = new DefaultCookieSerializer();
         serializer.setCookieName("owlly_session");
         serializer.setCookiePath("/");
         serializer.setUseHttpOnlyCookie(true);
         serializer.setUseSecureCookie(secure);
         serializer.setSameSite("Lax");
+        // 서버 유휴 만료와 동일한 기간의 지속 쿠키. 설정을 바꾸면 쿠키 수명도 함께 바뀐다.
+        int maxAge = Math.toIntExact(DurationStyle.detectAndParse(timeout).toSeconds());
+        if (maxAge <= 0) throw new IllegalArgumentException("세션 만료 기간은 양수여야 합니다.");
+        serializer.setCookieMaxAge(maxAge);
         return serializer;
     }
 

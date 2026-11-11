@@ -203,7 +203,7 @@ public class EmailVerificationService {
         return new VerificationGrantResponse(token, expires);
     }
 
-    /** 가입 트랜잭션에서 호출: 계정 생성이 실패하면 증표 소비도 롤백된다. */
+    /** 가입·로그인 트랜잭션에서 호출: 후속 계정 검증/저장이 실패하면 증표 소비도 롤백된다. */
     @Transactional(propagation = Propagation.MANDATORY)
     public VerifiedEmail consumeGrant(String token) {
         checkSecret();
