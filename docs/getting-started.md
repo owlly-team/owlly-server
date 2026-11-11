@@ -106,25 +106,77 @@ java -jar build/libs/owlly-0.0.1-SNAPSHOT.jar
 
 ## 학생 가입 테스트
 
-**현재 API-02·API-07은 완료입니다.** 2026-11-11 사용자가 실제 가입·세션 조회·DB 행정동 연결·로그아웃을 수동 확인했습니다. develop의 공통 행정동 판별 서비스가 가입용 인터페이스에 연결되어 있습니다. 카카오 키 누락·장애는 `503 UPSTREAM_UNAVAILABLE`, 판별 실패는 `422 LOCATION_UNRESOLVABLE`입니다. 자동 테스트에서는 연결 지점을 mock으로 대체합니다.
+학생 기능 테스트에 사용할 계정이 없는 경우 한 번 가입합니다. 학교 이메일 수신이 가능해야 하며, 위 SMTP 설정과 `.env`의 `KAKAO_REST_API_KEY`가 필요합니다.
 
-1. 로컬 `.env`의 `KAKAO_REST_API_KEY`를 설정합니다. 공통 `AdministrativeAreaResolver`가 `DropoffLocationService`를 구현하므로 가입용 어댑터를 추가할 필요는 없습니다.
-2. 공통 서비스는 카카오 행정동(H) 코드를 DB 공식 코드에 연결하고, 없는 시·구·동은 등록한 뒤 `resolveDong(latitude, longitude)`에서 DONG 엔티티를 반환합니다. 별도 행정구역 시드는 필요하지 않습니다.
-3. Swagger에서 대학 조회 → 이메일 발급(202) → 코드 검증(200) → 증표로 가입(201)을 진행합니다. 각 명령에 서로 다른 UUID `Idempotency-Key`를 사용합니다. 가입 재시도만 같은 키와 본문을 유지합니다.
-4. `GET /api/v1/profile-options`의 코드 `FEMALE`/`MALE`를 사용합니다. 이름은 2~20자이며 `sameGenderDefault`는 `true`/`false` 모두 허용합니다. 선택한 값을 저장하고, 생략/null이면 true로 처리합니다. 선택값 조회 응답의 true는 초기 기본값입니다.
-5. 가입 응답의 `data.csrfToken`과 `owlly_session` 쿠키로 세션 조회·보호 API·로그아웃을 확인합니다. Swagger에 CSRF 헤더 입력란이 없는 경우 Postman/curl에서 `X-CSRF-Token`과 쿠키를 전달합니다. 로그아웃 후 세션 조회는 401입니다.
+1. `GET /api/v1/universities`에서 대학과 이메일 도메인을 조회합니다.
+2. `POST /api/v1/auth/email-verifications`로 인증번호를 받고, `POST /api/v1/auth/email-verifications/{id}/verify`로 검증해 `verificationToken`을 받습니다.
+3. `POST /api/v1/auth/student-registrations`에 증표와 `profile`을 보냅니다. `realName`은 2~20자, `genderCode`는 `GET /api/v1/profile-options`의 `FEMALE`/`MALE`, `sameGenderDefault`는 동성 매칭 기본값입니다. `defaultDropoff`에는 하차 지점의 `latitude`·`longitude`를 넣습니다. 행정동은 서버가 연결하므로 별도 시드는 필요 없습니다.
+4. 가입 성공(201) 시 자동 로그인됩니다. 응답의 `data.user`와 `data.csrfToken`을 사용해 담당 기능 테스트를 진행합니다.
 
-가입과 현재 세션 조회 응답의 `data.user`에 `universityName`을 추가했습니다. 하차 동 이름을 반환하는 프로필 조회·수정 API는 후속 브랜치에서 구현합니다.
-
-`StudentRegistrationIntegrationTest`는 실제 PostgreSQL을 사용하며 공통 행정동 판별 계약만 mock으로 대체합니다. 테스트별 무작위 이메일·행정동을 만들고 종료 시 그 데이터와 세션만 정리합니다. 위치 서비스 오류·증표 소비 롤백·계정/세션 미생성을 검증합니다. 자동 테스트 통과는 실제 카카오 가입 검증 완료를 뜻하지 않습니다. `.env`에 실제 DB/암호화 키 설정이 필요하고, 주석은 `//`가 아닌 `#`로 작성합니다.
+각 POST에는 새 UUID `Idempotency-Key`를 사용하고, 네트워크 재전송에만 같은 키·본문을 유지합니다. 요청 필드와 예시는 [API 명세](api.md)를 참고하세요.
 
 ## 기존 학생 로그인 테스트
 
-1. 이미 가입된 학교 이메일로 이메일 발급 → 코드 검증을 다시 진행합니다. 가입에 사용한 증표를 재사용하지 않습니다.
-2. 받은 `verificationToken`으로 `POST /api/v1/auth/student-sessions`를 호출합니다. 허용 Origin·UUID Idempotency-Key와 JSON 본문이 필요합니다.
-3. 200 응답의 대학명·CSRF 토큰, `owlly_session` 쿠키의 Max-Age=2592000(30일 기본값), 세션 조회를 확인합니다. 브라우저는 credentials/include 또는 withCredentials를 사용합니다.
-4. 미가입은 404 ACCOUNT_NOT_FOUND입니다. 증표 소비가 롤백되므로 증표 유효기간 내 프로필을 입력해 가입할 수 있습니다. STAFF·탈퇴·프로필 누락·대학 불일치는 403 ACCOUNT_UNAVAILABLE, 정지는 403 ACCOUNT_SUSPENDED입니다.
-5. 같은 로그인 재시도는 같은 키·증표를 유지합니다. 인증 쿠키를 함께 보내는 재시도에는 해당 세션의 X-CSRF-Token도 필요합니다. 다른 키의 소비된 증표는 409, 같은 키의 다른 증표도 409입니다.
-6. 로그아웃 후 기존 쿠키로 세션 조회 시 401인지 확인합니다. 앱 재진입은 먼저 GET /api/v1/auth/session으로 확인하고 성공하면 홈으로 이동합니다.
+이미 가입한 학생 계정으로 다시 로그인할 때 사용합니다.
 
-`StudentLoginIntegrationTest`는 PostgreSQL의 실제 증표 소비·멱등 기록·잠금·세션을 검증합니다. 이메일 발급·검증 → 로그인 연결 테스트는 발송기만 mock으로 대체하므로 실제 메일을 보내지 않습니다. 별도로 2026-11-11 사용자가 Swagger에서 실제 학교 이메일 재인증 → API-08 로그인 → 기존 계정 세션 조회를 수동 확인했습니다. 로그인 전용 추가 속도 제한 기준은 미정이며, 기존 발송·인증 실패 제한은 적용됩니다.
+1. `GET /api/v1/auth/session`으로 기존 세션이 유효한지 확인합니다. 200이면 그대로 담당 기능 테스트를 진행하고, 401이면 아래 절차로 로그인합니다.
+2. 가입한 학교 이메일로 인증번호 발급·검증을 다시 진행해 새 `verificationToken`을 받습니다. 가입에 사용한 증표를 재사용하지 않습니다.
+3. 새 UUID `Idempotency-Key`와 아래 본문으로 `POST /api/v1/auth/student-sessions`를 호출합니다. 성공하면 200과 세션·CSRF 토큰을 받습니다.
+
+```json
+{
+  "verificationToken": "새로_발급받은_증표"
+}
+```
+
+미가입 이메일은 먼저 위 가입 절차를 진행합니다. 로그인 요청의 네트워크 재전송에는 같은 키·증표를 유지합니다.
+
+## 관계자 로그인 테스트
+
+관계자 수요·리포트 기능 테스트에는 발급된 STAFF 계정을 사용합니다. 학생 프로필·학교 이메일 인증은 필요하지 않습니다. 로컬 DB에 계정이 없다면 아래 순서로 준비합니다.
+
+1. 서버를 한 번 실행한 뒤, IntelliJ **Terminal** 또는 PowerShell에서 비밀번호 해시를 만듭니다. 비밀번호를 숨겨서 입력받고 BCrypt 해시를 출력합니다. 로그인에는 입력한 비밀번호 원문을 사용합니다. Gradle 의존성이 없다면 먼저 `.\gradlew.bat compileJava`를 실행합니다.
+
+```powershell
+$staffCryptoJar = Get-ChildItem -Path "$env:USERPROFILE\.gradle\caches\modules-2\files-2.1\org.springframework.security\spring-security-crypto" -Recurse -Filter 'spring-security-crypto-*.jar' |
+    Where-Object { $_.Name -notmatch '-sources|-javadoc' } |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 1
+java -cp $staffCryptoJar.FullName tools/StaffPasswordHash.java
+```
+
+2. 로컬 DB에 접속해 대학 ID를 조회합니다. DB 이름·사용자는 `.env`에서 변경했다면 맞춰 사용합니다.
+
+```powershell
+docker compose exec postgres psql -U owlly -d owlly
+```
+
+```sql
+SELECT id, name FROM universities ORDER BY id;
+```
+
+3. 다음 SQL의 `실제_대학_ID`를 조회한 숫자로, `생성한_BCrypt_해시`를 위 명령의 출력으로 바꿉니다. 이메일은 고유한 소문자 주소를 사용하고 기존 학생 계정은 변경하지 않습니다.
+
+```sql
+INSERT INTO users (university_id, email, role, password_hash, status, created_at, updated_at)
+VALUES (실제_대학_ID, 'staff-test@example.com', 'STAFF', '생성한_BCrypt_해시', 'ACTIVE', NOW(), NOW());
+```
+
+DB 접속은 `\q`로 종료합니다.
+
+계정 준비 후 `POST /api/v1/auth/staff-sessions`에 새 UUID `Idempotency-Key`와 아래 본문을 보냅니다. 성공하면 200과 STAFF 계정 정보·대학명·CSRF 토큰을 받습니다.
+
+```json
+{
+  "email": "staff-test@example.com",
+  "password": "직접_설정한_비밀번호"
+}
+```
+
+## 가입·로그인 후 공통 사용법
+
+- localhost HTTP 개발은 `SESSION_COOKIE_SECURE=false`, 세션 기간은 `SESSION_TIMEOUT=30d`를 사용합니다. 관계자 로그인용 `STAFF_LOGIN_*` 변수는 기본값이 있어 필수 추가할 항목이 없습니다.
+- 인증 POST에는 허용된 `Origin`과 UUID `Idempotency-Key`가 필요합니다. UUID는 PowerShell에서 `[guid]::NewGuid().ToString()`으로 생성합니다.
+- 가입·로그인 후 같은 브라우저의 Swagger는 `owlly_session` 쿠키를 자동 전송합니다. 프런트 fetch는 `credentials: 'include'`, Axios는 `withCredentials: true`를 사용합니다. Postman/curl에서도 쿠키를 유지해야 합니다.
+- 로그인된 POST/PUT/PATCH/DELETE에는 가입·로그인 응답 또는 `GET /api/v1/auth/session`의 `data.csrfToken`을 `X-CSRF-Token` 헤더로 보냅니다. 기존 인증 쿠키를 동반한 로그인 재시도에도 필요하며, 로그인 후에는 새 토큰을 사용합니다. Swagger에 헤더 입력란이 없으면 Postman/curl에서 전달합니다.
+- 역할을 바꾸려면 새 UUID 키·현재 CSRF 토큰으로 `DELETE /api/v1/auth/session`을 호출해 로그아웃(204)한 뒤 다른 계정으로 로그인합니다. 또는 별도 시크릿 창을 사용합니다. 학생 기능은 STUDENT, 관계자 수요·리포트 기능은 STAFF 계정으로 호출합니다.

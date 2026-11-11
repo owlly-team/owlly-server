@@ -41,7 +41,7 @@ public class User extends BaseTimeEntity {
     @Column(nullable = false, length = 20)
     private Role role;
 
-    /** 관계자 비밀번호 해시. 학생 재로그인 방식 미확정이므로 nullable. */
+    /** 관계자 BCrypt 비밀번호 해시. 학생은 이메일 OTP를 사용하므로 nullable. */
     @Column(name = "password_hash")
     private String passwordHash;
 

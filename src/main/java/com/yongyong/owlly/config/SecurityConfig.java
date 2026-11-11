@@ -149,7 +149,10 @@ public class SecurityConfig {
                                 "/api/v1/auth/email-verifications/*/verify", "/api/v1/auth/student-registrations",
                                 "/api/v1/auth/student-sessions", "/api/v1/auth/staff-sessions").permitAll()
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/auth/session").permitAll()
-                        .requestMatchers("/api/v1/pickup-points", "/api/v1/banks", "/api/v1/me/**").hasRole("STUDENT")
+                        .requestMatchers("/api/v1/pickup-points", "/api/v1/banks", "/api/v1/me/**",
+                                "/api/v1/travel-options", "/api/v1/journeys/**", "/api/v1/matching-slots",
+                                "/api/v1/ride-requests/**", "/api/v1/parties/**", "/api/v1/rooms/**",
+                                "/api/v1/transfers/**").hasRole("STUDENT")
                         .requestMatchers("/api/v1/staff/**", "/api/v1/demand/**").hasRole("STAFF")
                         .anyRequest().authenticated());
         return http.build();
