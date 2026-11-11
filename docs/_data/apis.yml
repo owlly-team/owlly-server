@@ -69,9 +69,7 @@ sections:
         method: POST
         path: /auth/student-registrations
         desc: 학생 가입·프로필 생성
-        status: 대기
-        waitingFor: 공통 행정동 판별 서비스
-        waitingNote: 가입·프로필 저장·멱등 처리·세션 연결 구현 완료. 공통 좌표→DB 행정동 판별 어댑터 연결과 실제 연동 검증 대기. 미연결 상태에서는 503 POLICY_NOT_CONFIGURED 반환
+        status: 완료
         auth: 비로그인 (PUBLIC) · Idempotency-Key 필수
         success: "201 · data = Session"
         req: |
@@ -90,7 +88,7 @@ sections:
         method: POST
         path: /auth/student-sessions
         desc: 학생 재로그인
-        status: 시작 전
+        status: 완료
         auth: 비로그인 (PUBLIC) · Idempotency-Key 필수
         success: "200 · data = Session"
         req: |
@@ -98,7 +96,7 @@ sections:
           {
             "verificationToken": "example-one-time-proof"
           }
-        errors: ["404 ACCOUNT_NOT_FOUND", "410 VERIFICATION_EXPIRED", "409 VERIFICATION_USED", "503 POLICY_NOT_CONFIGURED", "403 ACCOUNT_UNAVAILABLE"]
+        errors: ["404 ACCOUNT_NOT_FOUND", "410 VERIFICATION_EXPIRED", "409 VERIFICATION_USED", "409 IDEMPOTENCY_CONFLICT", "422 VALIDATION_ERROR", "403 FORBIDDEN", "403 ACCOUNT_SUSPENDED", "403 ACCOUNT_UNAVAILABLE", "503 POLICY_NOT_CONFIGURED"]
       - id: API-09
         method: POST
         path: /auth/staff-sessions

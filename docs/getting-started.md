@@ -101,19 +101,30 @@ java -jar build/libs/owlly-0.0.1-SNAPSHOT.jar
 - 인증은 Spring Security + Spring Session JDBC의 서버 세션 방식입니다. 상세 연결 방법은 [세션 인증](auth-session.md)을 참고하세요.
 - 기존 `.env`에는 `.env.example`의 세션 설정도 추가하세요. localhost HTTP 개발은 `SESSION_COOKIE_SECURE=false`, 운영 HTTPS는 `true`를 사용합니다.
 - 이메일 인증 POST에도 허용된 `Origin` 헤더가 필요합니다. Swagger에서는 `http://localhost:8080`, 프런트에서는 자신의 Origin을 `ALLOWED_ORIGINS`에 포함하세요. curl/Postman은 `Origin: http://localhost:8080`을 직접 추가합니다.
-- 대학·프로필 선택값·공개 인증·Swagger·health 이외의 경로는 인증이 필요합니다. 학생 가입·자동 로그인 로직은 구현했지만 공통 행정동 판별 서비스 연결 전에는 가입이 503으로 보류됩니다. 기존 학생 재로그인은 후속 구현입니다.
+- 대학·프로필 선택값·공개 인증·Swagger·health 이외의 경로는 인증이 필요합니다. 학생 가입과 이메일 OTP 학생 로그인은 구현되어 있습니다. 공통 행정동 서비스가 가입에 연결되어 있고 실제 가입 연동 검증도 완료했습니다. 기존 `.env`의 `SESSION_TIMEOUT`도 `30d`로 갱신하세요. 지속 쿠키 수명은 같은 값을 따릅니다.
 - `SessionIntegrationTest`는 H2 기반 JDBC 세션 통합 테스트입니다. 기존 `OwllyApplicationTests.contextLoads`는 실제 PostgreSQL과 `.env` 설정이 필요합니다.
 
 ## 학생 가입 테스트
 
-**현재 API-02는 완료, API-07은 공통 행정동 판별 서비스 연결 대기입니다.** 실제 구현이 없으면 앱은 기동되지만 올바른 가입 요청에도 `503 POLICY_NOT_CONFIGURED`를 반환합니다. 테스트에서는 연결 지점만 mock으로 대체합니다.
+**현재 API-02·API-07은 완료입니다.** 2026-11-11 사용자가 실제 가입·세션 조회·DB 행정동 연결·로그아웃을 수동 확인했습니다. develop의 공통 행정동 판별 서비스가 가입용 인터페이스에 연결되어 있습니다. 카카오 키 누락·장애는 `503 UPSTREAM_UNAVAILABLE`, 판별 실패는 `422 LOCATION_UNRESOLVABLE`입니다. 자동 테스트에서는 연결 지점을 mock으로 대체합니다.
 
-1. 공통 지역 서비스 담당과 실제 메서드·응답을 맞춘 뒤 `DropoffLocationService` 구현 Bean을 추가해 기존 공통 서비스를 위임 호출합니다. 카카오 호출과 기준정보 매핑을 가입 브랜치에서 중복 구현하지 않습니다.
-2. 구현은 `resolveDong(latitude, longitude)`에서 DB에 존재하는 `AdministrativeArea`(ID 필수, level=DONG)를 반환해야 합니다. 이 계약은 가입 측에서 제안한 연결 규격이며 공통 서비스가 이미 이 인터페이스를 구현했다는 뜻이 아닙니다. 외부 API 키·DB 기준정보 설정은 실제 공통 구현의 안내를 따릅니다.
+1. 로컬 `.env`의 `KAKAO_REST_API_KEY`를 설정합니다. 공통 `AdministrativeAreaResolver`가 `DropoffLocationService`를 구현하므로 가입용 어댑터를 추가할 필요는 없습니다.
+2. 공통 서비스는 카카오 행정동(H) 코드를 DB 공식 코드에 연결하고, 없는 시·구·동은 등록한 뒤 `resolveDong(latitude, longitude)`에서 DONG 엔티티를 반환합니다. 별도 행정구역 시드는 필요하지 않습니다.
 3. Swagger에서 대학 조회 → 이메일 발급(202) → 코드 검증(200) → 증표로 가입(201)을 진행합니다. 각 명령에 서로 다른 UUID `Idempotency-Key`를 사용합니다. 가입 재시도만 같은 키와 본문을 유지합니다.
 4. `GET /api/v1/profile-options`의 코드 `FEMALE`/`MALE`를 사용합니다. 이름은 2~20자이며 `sameGenderDefault`는 `true`/`false` 모두 허용합니다. 선택한 값을 저장하고, 생략/null이면 true로 처리합니다. 선택값 조회 응답의 true는 초기 기본값입니다.
 5. 가입 응답의 `data.csrfToken`과 `owlly_session` 쿠키로 세션 조회·보호 API·로그아웃을 확인합니다. Swagger에 CSRF 헤더 입력란이 없는 경우 Postman/curl에서 `X-CSRF-Token`과 쿠키를 전달합니다. 로그아웃 후 세션 조회는 401입니다.
 
 가입과 현재 세션 조회 응답의 `data.user`에 `universityName`을 추가했습니다. 하차 동 이름을 반환하는 프로필 조회·수정 API는 후속 브랜치에서 구현합니다.
 
-`StudentRegistrationIntegrationTest`는 실제 PostgreSQL을 사용하며 공통 행정동 판별 계약만 mock으로 대체합니다. 테스트별 무작위 이메일·행정동을 만들고 종료 시 그 데이터와 세션만 정리합니다. 미연결 시 503·증표 소비 롤백·계정/세션 미생성을 검증합니다. 성공 시나리오 테스트 통과는 실제 공통 연동 완료를 뜻하지 않습니다. `.env`에 실제 DB/암호화 키 설정이 필요하고, 주석은 `//`가 아닌 `#`로 작성합니다.
+`StudentRegistrationIntegrationTest`는 실제 PostgreSQL을 사용하며 공통 행정동 판별 계약만 mock으로 대체합니다. 테스트별 무작위 이메일·행정동을 만들고 종료 시 그 데이터와 세션만 정리합니다. 위치 서비스 오류·증표 소비 롤백·계정/세션 미생성을 검증합니다. 자동 테스트 통과는 실제 카카오 가입 검증 완료를 뜻하지 않습니다. `.env`에 실제 DB/암호화 키 설정이 필요하고, 주석은 `//`가 아닌 `#`로 작성합니다.
+
+## 기존 학생 로그인 테스트
+
+1. 이미 가입된 학교 이메일로 이메일 발급 → 코드 검증을 다시 진행합니다. 가입에 사용한 증표를 재사용하지 않습니다.
+2. 받은 `verificationToken`으로 `POST /api/v1/auth/student-sessions`를 호출합니다. 허용 Origin·UUID Idempotency-Key와 JSON 본문이 필요합니다.
+3. 200 응답의 대학명·CSRF 토큰, `owlly_session` 쿠키의 Max-Age=2592000(30일 기본값), 세션 조회를 확인합니다. 브라우저는 credentials/include 또는 withCredentials를 사용합니다.
+4. 미가입은 404 ACCOUNT_NOT_FOUND입니다. 증표 소비가 롤백되므로 증표 유효기간 내 프로필을 입력해 가입할 수 있습니다. STAFF·탈퇴·프로필 누락·대학 불일치는 403 ACCOUNT_UNAVAILABLE, 정지는 403 ACCOUNT_SUSPENDED입니다.
+5. 같은 로그인 재시도는 같은 키·증표를 유지합니다. 인증 쿠키를 함께 보내는 재시도에는 해당 세션의 X-CSRF-Token도 필요합니다. 다른 키의 소비된 증표는 409, 같은 키의 다른 증표도 409입니다.
+6. 로그아웃 후 기존 쿠키로 세션 조회 시 401인지 확인합니다. 앱 재진입은 먼저 GET /api/v1/auth/session으로 확인하고 성공하면 홈으로 이동합니다.
+
+`StudentLoginIntegrationTest`는 PostgreSQL의 실제 증표 소비·멱등 기록·잠금·세션을 검증합니다. 이메일 발급·검증 → 로그인 연결 테스트는 발송기만 mock으로 대체하므로 실제 메일을 보내지 않습니다. 별도로 2026-11-11 사용자가 Swagger에서 실제 학교 이메일 재인증 → API-08 로그인 → 기존 계정 세션 조회를 수동 확인했습니다. 로그인 전용 추가 속도 제한 기준은 미정이며, 기존 발송·인증 실패 제한은 적용됩니다.
