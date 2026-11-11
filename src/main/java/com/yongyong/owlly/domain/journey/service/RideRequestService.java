@@ -10,6 +10,7 @@ import com.yongyong.owlly.domain.journey.repository.RideRequestRepository;
 import com.yongyong.owlly.domain.party.entity.PartyMember;
 import com.yongyong.owlly.domain.party.repository.PartyMemberRepository;
 import com.yongyong.owlly.domain.region.service.PlaceNameReader;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -54,20 +55,26 @@ public class RideRequestService {
 
     /**
      * 대기 신청 취소 (API-21). 매칭 대기 중 "등록 취소"를 누를 때.
-     * - WAITING → CANCELLED
-     * - 이미 CANCELLED 면 같은 응답(버튼을 두 번 눌러도 문제없게)
+     * - WAITING → CANCELLED. 출발 15분 전까지만 가능하고 지났으면 409 CANCELLATION_DEADLINE_PASSED
+     *   (화면정의서 S-03 "출발 15분 전까지는 언제든 취소할 수 있어요", 방 나가기 마감과 같은 시각)
+     * - 이미 CANCELLED 면 같은 응답(버튼을 두 번 눌러도 문제없게). 마감이 지난 뒤에 다시 눌러도 같은 응답
      * - MATCHED 면 409 REQUEST_ALREADY_MATCHED: 이미 팟에 배정됐으니 팟 거절·이탈로 처리해야 한다
      * - FAILED·EXPIRED 면 409 INVALID_STATE: 이미 끝난 신청
      * 매칭 작업과 동시에 바뀌지 않도록 신청을 잠근 뒤 확인한다.
      */
     @Transactional
-    public RideRequestResponse cancelMyRideRequest(Long userId, Long requestId) {
+    public RideRequestResponse cancelMyRideRequest(Long userId, Long requestId, Instant now) {
         RideRequest request = rideRequestRepository.findByIdForUpdate(requestId)
                 .filter(r -> isOwnedBy(r, userId))
                 .orElseThrow(() -> new OwllyException(ErrorCode.RESOURCE_NOT_FOUND));
 
         switch (request.getStatus()) {
-            case WAITING -> request.cancel();
+            case WAITING -> {
+                if (now.isAfter(request.getDepartureAt().minus(DepartureSlotPolicy.REGISTRATION_CLOSES_BEFORE_DEPARTURE))) {
+                    throw new OwllyException(ErrorCode.CANCELLATION_DEADLINE_PASSED);
+                }
+                request.cancel();
+            }
             case CANCELLED -> { /* 이미 취소됨: 그대로 같은 응답 */ }
             case MATCHED -> throw new OwllyException(ErrorCode.REQUEST_ALREADY_MATCHED);
             case FAILED, EXPIRED -> throw new OwllyException(ErrorCode.INVALID_STATE);

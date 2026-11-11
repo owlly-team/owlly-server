@@ -7,6 +7,7 @@ import com.yongyong.owlly.common.web.IdempotencyKey;
 import com.yongyong.owlly.domain.journey.dto.RideRequestResponse;
 import com.yongyong.owlly.domain.journey.service.RideRequestService;
 import jakarta.validation.constraints.Positive;
+import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -39,7 +40,7 @@ public class RideRequestController {
     }
 
     /**
-     * API-21 대기 신청 취소. 매칭 대기 중 "등록 취소". 이미 취소했으면 같은 응답이라 같은 키로 다시 보내도 안전하다.
+     * API-21 대기 신청 취소. 매칭 대기 중 "등록 취소"(출발 15분 전까지). 이미 취소했으면 같은 응답이라 같은 키로 다시 보내도 안전하다.
      */
     @PostMapping("/{requestId}/cancel")
     public ApiResponse<RideRequestResponse> cancelRideRequest(
@@ -47,6 +48,6 @@ public class RideRequestController {
             @PathVariable @Positive Long requestId,
             @RequestHeader("Idempotency-Key") String idempotencyKey) {
         IdempotencyKey.requireUuid(idempotencyKey);
-        return ApiResponse.of(rideRequestService.cancelMyRideRequest(principal.userId(), requestId));
+        return ApiResponse.of(rideRequestService.cancelMyRideRequest(principal.userId(), requestId, Instant.now()));
     }
 }
