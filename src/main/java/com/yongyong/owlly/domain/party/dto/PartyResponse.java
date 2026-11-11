@@ -16,6 +16,8 @@ public record PartyResponse(
         Long id,                             // 팟 번호
         PartyStatus status,                  // FORMING / CONFIRMING / PREPAYING / READY / RIDING / SETTLING / COMPLETED / CANCELLED
         PickupPointResponse pickupPoint,     // 집결 거점 (이름·공개 좌표·집결 안내)
+        Long districtId,                     // 같은 방향 매칭 권역(구, 구가 없는 시는 시)
+        String districtName,                 // 권역 이름. 홈 카드의 "영통구 방향"
         Instant departureAt,                 // 출발 시각
         Instant confirmDeadlineAt,           // 확정 마감. 홈 카드·매칭 결과의 "22:49까지 확정해 주세요"와 남은 시간
         Long representativeMemberId,         // 대표의 팟 참여 번호. 정해지기 전이면 null

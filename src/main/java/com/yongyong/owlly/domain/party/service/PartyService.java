@@ -119,6 +119,7 @@ public class PartyService {
                         row.universityName(),
                         row.destinationDongName(),
                         row.genderSnapshot() == me.genderSnapshot(),
+                        row.genderSnapshot(),
                         Objects.equals(row.memberId(), party.getRepresentativeMemberId()),
                         row.decision(),
                         row.boardingStatus(),
@@ -129,6 +130,8 @@ public class PartyService {
                 party.getId(),
                 party.getStatus(),
                 pickupPoint,
+                party.getDistrictId(),
+                placeNameReader.areaNames(Collections.singletonList(party.getDistrictId())).get(party.getDistrictId()),
                 party.getDepartureAt(),
                 confirmDeadline(party),
                 party.getRepresentativeMemberId(),
@@ -182,8 +185,8 @@ public class PartyService {
         boolean everyoneConfirmed = members.stream()
                 .filter(PartyMember::isActive)
                 .allMatch(member -> member.getDecision() == MemberDecision.ACCEPTED);
+        chatRoomService.openRoom(partyId);   // 확정한 사람부터 바로 입장: 전원을 기다리지 않는다(기획 답변 v2 #9). 이미 열려 있으면 그대로 둔다
         if (everyoneConfirmed) {
-            chatRoomService.openRoom(partyId);
             party.startPrepaying();
         }
         return getParty(userId, partyId, now);
@@ -337,6 +340,7 @@ public class PartyService {
         }
 
         party.markTaxiCalled(now);
+        String representativeName = Masking.holderName(encryptedValueReader.readText(me.realNameEncrypted()));
         rows.stream()
                 .filter(row -> row.decision() == MemberDecision.ACCEPTED)
                 .filter(row -> !row.memberId().equals(party.getRepresentativeMemberId()))
@@ -345,7 +349,7 @@ public class PartyService {
                         party.getId(),
                         NotificationType.SYSTEM,
                         "taxi-called:member:" + row.memberId(),
-                        "대표가 택시를 불렀어요",
+                        representativeName + "님이 택시를 불렀어요",   // 기획 답변 v2 #13: "{대표}님이 택시를 불렀어요"
                         "타면 채팅방에서 탔어요를 눌러 주세요",
                         "/parties/" + party.getId() + "/room",
                         null)));
