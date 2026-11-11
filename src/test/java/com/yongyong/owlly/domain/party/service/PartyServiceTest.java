@@ -112,4 +112,26 @@ class PartyServiceTest {
         assertThat(PartyService.allowedActions(called, MemberDecision.ACCEPTED, BoardingStatus.UNKNOWN, minutesBeforeDeparture(5), true))
                 .containsExactly(PartyAction.RECORD_BOARDING);
     }
+
+    @Test
+    void 확정_마감에_대표가_확정하지_않았으면_몇_명이_확정했든_해산한다() {
+        assertThat(PartyService.decideAtConfirmDeadline(false, 0))
+                .isEqualTo(PartyService.DeadlineOutcome.DISBAND_REPRESENTATIVE_NOT_CONFIRMED);
+        assertThat(PartyService.decideAtConfirmDeadline(false, 3))
+                .isEqualTo(PartyService.DeadlineOutcome.DISBAND_REPRESENTATIVE_NOT_CONFIRMED);
+    }
+
+    @Test
+    void 확정_마감에_대표가_확정했어도_확정한_사람이_2명_미만이면_해산한다() {
+        assertThat(PartyService.decideAtConfirmDeadline(true, 1))
+                .isEqualTo(PartyService.DeadlineOutcome.DISBAND_TOO_FEW);
+    }
+
+    @Test
+    void 확정_마감에_대표가_확정했고_2명_이상이면_확정한_사람끼리_진행한다() {
+        assertThat(PartyService.decideAtConfirmDeadline(true, 2))
+                .isEqualTo(PartyService.DeadlineOutcome.CONTINUE_WITH_CONFIRMED);
+        assertThat(PartyService.decideAtConfirmDeadline(true, 4))
+                .isEqualTo(PartyService.DeadlineOutcome.CONTINUE_WITH_CONFIRMED);
+    }
 }
