@@ -293,13 +293,13 @@
 
 **처리·검증:** 검증 증표의 대학·이메일로 계정을 생성합니다. 대학·이메일은 요청에서 받지 않고 인증 증표에서 얻으며 활성 대학·도메인인지 다시 검사합니다. `role=STUDENT`, `status=ACTIVE`, `userId`는 서버가 결정합니다. 이름은 앞뒤 공백 제거 후 2~20자, 성별은 `FEMALE`/`MALE`, 동성 매칭은 `true`/`false` 모두 허용하고 선택한 값을 저장합니다(생략/null이면 true). 위도 -90~90, 경도 -180~180의 유한한 숫자가 필수입니다.
 
-**현재 상태: 구현·실제 회원가입 연동 검증 완료.** develop에 머지된 `AdministrativeAreaResolver`가 `DropoffLocationService.resolveDong(latitude, longitude)`를 구현하여 가입에 주입됩니다. 카카오의 행정동(H) 공식 코드로 DB를 조회하고, 없는 시·구·동은 공통 서비스가 등록하여 DONG 엔티티를 반환합니다. 지역 판별 실패는 422 LOCATION_UNRESOLVABLE, 키 누락·카카오 장애는 503 UPSTREAM_UNAVAILABLE로 전달합니다. 가입 트랜잭션 실패 시 증표 소비·계정·프로필·새 지역 저장도 함께 롤백됩니다. 2026-11-11 사용자 수동 검증에서 가입·세션 조회, DB 하차 지역 연결(모현읍, 공식 코드 4146125300, DONG), 동성 옵션 false 저장 및 로그아웃을 확인하여 API-07을 완료로 변경했습니다.
+**행정동 연결:** develop에 머지된 `AdministrativeAreaResolver`가 `DropoffLocationService.resolveDong(latitude, longitude)`를 구현하여 가입에 주입됩니다. 카카오의 행정동(H) 공식 코드로 DB를 조회하고, 없는 시·구·동은 공통 서비스가 등록하여 DONG 엔티티를 반환합니다. 지역 판별 실패는 422 LOCATION_UNRESOLVABLE, 키 누락·카카오 장애는 503 UPSTREAM_UNAVAILABLE로 전달합니다. 가입 트랜잭션 실패 시 증표 소비·계정·프로필·새 지역 저장도 함께 롤백됩니다.
 
 인증 증표 소비·계정·암호화한 실명/하차 좌표·프로필·가입 멱등 기록은 한 트랜잭션입니다. 위치 판별이나 저장 실패 시 증표 소비도 롤백되어 다시 시도할 수 있습니다. 기존 계정은 역할·상태에 관계없이 이메일 중복 가입을 막습니다. 탈퇴 후 재가입 정책과 이메일 UNIQUE 변경은 별도 작업입니다.
 
 `Idempotency-Key`는 UUID가 필수입니다. 같은 키·같은 정규화 요청은 기존 계정으로 201을 반환하고 세션을 새로 발급하며, 같은 키·다른 요청은 409 IDEMPOTENCY_CONFLICT입니다. 원래 인증 증표 만료까지 재시도가 가능하고, 만료 뒤에는 세션을 재발급하지 않습니다. 계정 정지·탈퇴 시 재시도 세션 발급도 막습니다. 토큰·실명·좌표 원문 대신 비밀키 기반 요청 해시와 계정 ID·만료만 인프라 테이블 `student_registration_receipts`에 보관하고, 만료 기록은 주기적으로 삭제합니다. 이미 만료 기록이 정리된 뒤의 증표 재사용은 VERIFICATION_USED 또는 VERIFICATION_EXPIRED입니다.
 
-**인증 연결:** DB 커밋 성공 후 서버 세션 쿠키를 발급하고 201 `data: Session`을 반환합니다. `data.user.universityId`를 유지하면서 `data.user.universityName`을 추가했습니다. 로그인/재시도 시 세션 ID와 CSRF 토큰은 새로 생성하며 응답은 `Cache-Control: no-store`입니다. 가입 응답은 세션 DTO이므로 하차 동 이름은 포함하지 않습니다. `defaultDongId`와 `defaultDongName`을 함께 제공하는 프로필 조회 API는 후속 `feat/student-profile` 범위입니다.
+**인증 연결:** DB 커밋 성공 후 서버 세션 쿠키를 발급하고 201 `data: Session`을 반환합니다. `data.user.universityId`를 유지하면서 `data.user.universityName`을 추가했습니다. 로그인/재시도 시 세션 ID와 CSRF 토큰은 새로 생성하며 응답은 `Cache-Control: no-store`입니다. 가입 응답은 세션 DTO이므로 하차 동 이름은 포함하지 않습니다. 가입 후 프로필 조회 API-12에서 `defaultDongId`와 `defaultDongName`을 함께 받습니다.
 
 **업무 오류:** `410 VERIFICATION_EXPIRED`, `409 VERIFICATION_USED`, `409 ACCOUNT_ALREADY_EXISTS`, `409 IDEMPOTENCY_CONFLICT`, `422 EMAIL_DOMAIN_NOT_ALLOWED`, `422 INVALID_GENDER_CODE`, `422 LOCATION_UNRESOLVABLE`, `422 VALIDATION_ERROR`, `403 FORBIDDEN`, `403 ACCOUNT_SUSPENDED`, `403 ACCOUNT_UNAVAILABLE`, `503 POLICY_NOT_CONFIGURED`, `503 UPSTREAM_UNAVAILABLE`
 
@@ -328,8 +328,6 @@
 **프런트 연결:** 유효한 세션이면 GET /auth/session 확인 후 홈으로 이동합니다. 세션이 없으면 이메일 인증 → 이 API 호출 → 성공 시 홈, 404 ACCOUNT_NOT_FOUND 시 유효 증표를 유지하고 프로필 가입으로 진행합니다. 이 기존/신규 학생 분기는 API 구현 기준이며 화면 정의서의 '이미 가입한 메일' 안내 및 인증 후 이동 문구와 프런트 연동 시 맞춰야 합니다.
 
 **업무 오류:** `404 ACCOUNT_NOT_FOUND`, `410 VERIFICATION_EXPIRED`, `409 VERIFICATION_USED`, `409 IDEMPOTENCY_CONFLICT`, `422 VALIDATION_ERROR`, `403 FORBIDDEN`, `403 ACCOUNT_SUSPENDED`, `403 ACCOUNT_UNAVAILABLE`, `503 POLICY_NOT_CONFIGURED` 및 공통 오류
-
-**수동 검증:** 2026-11-11 사용자가 실제 학교 이메일 재인증 → API-08 로그인(200, 기존 사용자 ID 유지) → 세션 조회(200)를 확인했습니다.
 
 **ERD 연결:** `users`, `email_verifications`
 
@@ -402,6 +400,10 @@
 
 **처리·검증:** 본인 실명·기본 하차 핀만 복호화하여 반환. 타인 userId를 입력받지 않음.
 
+`data.user`에는 기존 공통 User의 `universityName`을 포함하고, 기본 하차 행정동은 `defaultDongId`와 `defaultDongName`을 함께 반환합니다. 성별 코드는 가입 시 확정한 FEMALE/MALE입니다. 본인 실명·정확한 기본 좌표를 반환하므로 `Cache-Control: no-store`를 적용합니다. 응답의 `ETag`를 다음 프로필 수정의 `If-Match`에 전달합니다.
+
+**업무 오류:** `401 UNAUTHENTICATED`, `403 FORBIDDEN`, `403 ACCOUNT_SUSPENDED`, `403 ACCOUNT_UNAVAILABLE`, `404 RESOURCE_NOT_FOUND` 및 공통 오류
+
 **ERD 연결:** `users`, `student_profiles`
 
 ### API-13 · PATCH /me/profile · 내 프로필 수정
@@ -422,9 +424,19 @@
 }
 ```
 
-**처리·검증:** 실명/기본 동성 옵션/기본 하차 핀만 수정. 기존 신청 좌표와 성별 스냅샷은 불변. 성별 수정은 정책 미확정으로 이 API에서 받지 않음.
+**처리·검증:** 화면 정의서 v0.4 S-08과 사용자 확인에 따라 동성 매칭 기본값과 기본 하차 지점만 수정합니다. 이름·학교·이메일·성별은 조회 전용이며 요청에 포함하면 422입니다. 재인증을 통한 이름·학교 변경 화면은 정의되지 않아 이번 API에 포함하지 않습니다. 위치·알림 권한 상태는 기기/브라우저가 관리하며 프로필 DB에 저장하지 않습니다.
 
-**업무 오류:** `422 LOCATION_UNRESOLVABLE`
+**부분 수정:** `sameGenderDefault`는 JSON boolean true/false 모두 허용합니다. `defaultDropoff`는 숫자형 latitude(-90~90)·longitude(-180~180)를 함께 보냅니다. 최소 한 필드가 필요하며 생략한 필드는 유지합니다. 명시적인 null, 빈 객체, 숫자·boolean의 문자열 대체, 미정의 필드는 422입니다.
+
+**위치 저장:** 공통 DropoffLocationService로 좌표를 행정동에 연결하고, 동 ID·암호화한 좌표·토글 변경·멱등 기록을 같은 트랜잭션에서 커밋합니다. 판별·암호화·저장 실패 시 모두 롤백합니다. 카카오 키 누락·장애는 503 UPSTREAM_UNAVAILABLE, 판별 불가는 422 LOCATION_UNRESOLVABLE입니다. 프로필 변경은 기존 귀가·동승 신청의 행정동·좌표·동성 옵션·성별 스냅샷에 소급하지 않습니다. S-08에서 지도에 진입한 경우에만 이 API로 기본값을 저장하며, S-02 동승 등록에서 고른 위치는 해당 신청에 사용합니다.
+
+**동시 수정·재시도:** 로그인 쿠키와 X-CSRF-Token, UUID Idempotency-Key, If-Match가 필수입니다. 새 명령의 If-Match 누락은 428, 현재 프로필 응답과 불일치는 412입니다. 같은 키·같은 사용자·같은 요청의 완료 기록은 ETag 비교 전에 확인해 재적용 없이 현재 프로필·ETag를 반환합니다. 이후 다른 수정이 있었다면 그 현재 값을 반환하며 과거 값으로 되돌리지 않습니다. 같은 키의 다른 사용자/본문은 409입니다. 실패한 수정에는 완료 기록을 남기지 않아 같은 키·본문으로 재시도할 수 있습니다. 계정 상태·역할 검증은 재시도에도 적용합니다.
+
+**멱등 기록:** `student_profile_update_receipts`에 키·사용자 ID·요청 HMAC·만료만 보관하며 실명·좌표·응답·세션 원문은 저장하지 않습니다. 기존 VERIFICATION_SECRET(32바이트 이상)을 재사용합니다. 기록의 구현 기본 유효기간은 성공 커밋 기준 24시간(PROFILE_UPDATE_RECEIPT_TTL_SECONDS=86400, 생략 가능)이며 재시도로 연장하지 않습니다. 만료·삭제된 키는 현재 ETag가 필요한 새 요청으로 처리합니다. 행 잠금과 FOR UPDATE SKIP LOCKED로 수정 중 기록이 정리에 삭제되지 않게 합니다. 이 보관 기간은 구현 설정이며 피그마의 별도 정책은 아닙니다.
+
+**응답:** 200 + 현재 StudentProfile, 새 ETag, Cache-Control: no-store. Swagger의 PATCH에는 X-CSRF-Token 입력란도 제공합니다.
+
+**업무 오류:** `401 UNAUTHENTICATED`, `403 FORBIDDEN`, `403 ACCOUNT_SUSPENDED`, `403 ACCOUNT_UNAVAILABLE`, `404 RESOURCE_NOT_FOUND`, `409 IDEMPOTENCY_CONFLICT`, `412 PRECONDITION_FAILED`, `428 PRECONDITION_REQUIRED`, `422 VALIDATION_ERROR`, `422 LOCATION_UNRESOLVABLE`, `503 UPSTREAM_UNAVAILABLE`, `503 POLICY_NOT_CONFIGURED` 및 공통 오류
 
 **ERD 연결:** `student_profiles`, `administrative_areas`
 
@@ -1176,6 +1188,7 @@
 | `genderCode` | string | 예 | 가입 시 확정한 성별 코드 |
 | `sameGenderDefault` | boolean | 예 | 동성 기본 설정 |
 | `defaultDongId` | string | 예 | 기본 행정동; 형식: `^[1-9][0-9]*$` |
+| `defaultDongName` | string | 예 | 기본 하차 행정동 이름 |
 | `defaultDropoff` | Point | 예 | 해당 DTO 참조 |
 
 ### ProfileInput
@@ -1191,11 +1204,10 @@
 
 | 필드 | 타입 | 필수 | 의미·제약 |
 | --- | --- | --- | --- |
-| `realName` | string | 아니오 | 본인 실명 수정; 최소 1자; 최대 50자 |
-| `sameGenderDefault` | boolean | 아니오 | 이후 신청 기본값 |
-| `defaultDropoff` | Point | 아니오 | 해당 DTO 참조 |
+| `sameGenderDefault` | boolean | 아니오 | 이후 신청 기본값. true/false 모두 허용, 명시적 null은 거부 |
+| `defaultDropoff` | Point | 아니오 | 기본 하차 좌표. 위도·경도 모두 숫자로 전달, 명시적 null은 거부 |
 
-최소 1개 필드를 포함해야 합니다.
+최소 1개 필드를 포함해야 합니다. 생략한 필드는 유지합니다. 이름·학교·이메일·성별 변경은 허용하지 않습니다(S-08 기준).
 
 ### EmailVerificationRequest
 
