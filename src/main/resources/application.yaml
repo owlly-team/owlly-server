@@ -35,6 +35,8 @@ spring:
     show-sql: true
 
 owlly:
+  profile:
+    receipt-ttl-seconds: ${PROFILE_UPDATE_RECEIPT_TTL_SECONDS:86400}
   staff-login:
     max-failures: ${STAFF_LOGIN_MAX_FAILURES:5}
     lock-seconds: ${STAFF_LOGIN_LOCK_SECONDS:1800}

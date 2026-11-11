@@ -67,6 +67,7 @@ StudentProfile:
       "genderCode": "string",
       "sameGenderDefault": "boolean",
       "defaultDongId": "string",
+      "defaultDongName": "string",
       "defaultDropoff": "Point"
     }
 EmailVerification:
