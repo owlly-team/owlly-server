@@ -237,6 +237,7 @@ public class PartyService {
                 .collect(Collectors.toMap(RideRequest::getId, Function.identity()));
         me.leave(now);
         requestById.get(me.getRequestId()).cancel();
+        chatRoomService.memberLeft(partyId, me.getId());
 
         List<PartyMember> remaining = members.stream().filter(PartyMember::isActive).toList();
         boolean representativeLeft = me.getId().equals(party.getRepresentativeMemberId());
@@ -252,6 +253,7 @@ public class PartyService {
     private void disband(RideParty party, List<PartyMember> remaining, Map<Long, RideRequest> requestById,
                          Map<Long, Long> userIdByMemberId, boolean representativeLeft) {
         party.cancel();
+        chatRoomService.closeRoom(party.getId(), Instant.now());
         String title = representativeLeft ? "대표가 빠져서 이번 동승이 취소됐어요" : "이번엔 매칭되지 않았어요";
         for (PartyMember member : remaining) {
             RideRequest request = requestById.get(member.getRequestId());
@@ -420,6 +422,7 @@ public class PartyService {
         }
 
         party.markTaxiCalled(now);
+        chatRoomService.taxiCalled(partyId);
         String representativeName = Masking.holderName(encryptedValueReader.readText(me.realNameEncrypted()));
         rows.stream()
                 .filter(row -> row.decision() == MemberDecision.ACCEPTED)

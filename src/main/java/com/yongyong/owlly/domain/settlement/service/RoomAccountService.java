@@ -3,6 +3,8 @@ package com.yongyong.owlly.domain.settlement.service;
 import com.yongyong.owlly.common.crypto.TextCryptor;
 import com.yongyong.owlly.common.exception.ErrorCode;
 import com.yongyong.owlly.common.exception.OwllyException;
+import com.yongyong.owlly.domain.chat.service.ChatRoomService;
+import java.time.Instant;
 import com.yongyong.owlly.domain.settlement.dto.AccountInput;
 import com.yongyong.owlly.domain.settlement.dto.MaskedAccount;
 import com.yongyong.owlly.domain.settlement.dto.RecipientAccount;
@@ -21,7 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>상황: 선송금·환급을 받을 계좌를 채팅방에 등록한다. 계좌번호·예금주는 암호화해서 저장하고,
  * 응답은 마스킹해서 돌려준다. 같은 방·멤버·용도의 계좌는 1개라, 다시 등록하면 교체(upsert)한다.
  *
- * <p>권한(용도별 대표/본인)·방 열림·기존 이체 잠금은 인증/정책이 필요하므로 아래 TODO 로 둔다.
+ * <p>확정 멤버·방 수명은 채팅 서비스와 함께 검증한다. 용도별 권한·기존 이체 잠금은 아래 TODO 로 둔다.
  */
 @Service
 @RequiredArgsConstructor
@@ -31,6 +33,7 @@ public class RoomAccountService {
     private final RoomAccountRepository roomAccountRepository;
     private final TransferRepository transferRepository;
     private final TextCryptor textCryptor;
+    private final ChatRoomService chatRooms;
 
     /**
      * 수취 계좌를 등록(또는 교체)한다.
@@ -39,7 +42,6 @@ public class RoomAccountService {
      *
      * <p>TODO(인증/정책 후):
      * <ul>
-     *   <li>방이 OPEN 인지 확인(아니면 ROOM_CLOSED).</li>
      *   <li>PREPAY_RECEIVE 는 대표만, REFUND_RECEIVE 는 본인만(ACCOUNT_PURPOSE_NOT_ALLOWED).</li>
      *   <li>이 계좌로 SENT/RECEIVED 된 이체가 있으면 덮어쓰기 금지(ACCOUNT_LOCKED).</li>
      *   <li>미송금 PENDING 이체에 수취 계좌 연결.</li>
@@ -52,6 +54,7 @@ public class RoomAccountService {
      */
     @Transactional
     public MaskedAccount register(Long roomId, AccountPurpose purpose, Long ownerMemberId, AccountInput input) {
+        chatRooms.requireAccountRegistration(roomId, ownerMemberId, Instant.now());
         // 1) 입력 정규화: 계좌번호의 공백·하이픈 제거, 앞뒤 공백 정리
         String bankCode = input.bankCode().strip();
         String accountNumber = input.accountNumber().replaceAll("[\\s-]", "");
@@ -96,10 +99,15 @@ public class RoomAccountService {
      * @param payerMemberId 송금자(팟 참여) ID — 인증 연결 전까지는 호출자가 넘겨준다
      * @param transferId    대상 이체 ID
      */
+    @Transactional
     public RecipientAccount getRecipientAccount(Long payerMemberId, Long transferId) {
         Transfer transfer = transferRepository.findById(transferId)
                 .filter(t -> t.getPayerMemberId().equals(payerMemberId))
                 .orElseThrow(() -> new OwllyException(ErrorCode.RESOURCE_NOT_FOUND));
+
+        Long partyId = transferRepository.findPartyIdById(transferId)
+                .orElseThrow(() -> new OwllyException(ErrorCode.RESOURCE_NOT_FOUND));
+        chatRooms.requireTransferAccountAccess(partyId, payerMemberId, Instant.now());
 
         Long accountId = transfer.getReceiverAccountId();
         if (accountId == null) {

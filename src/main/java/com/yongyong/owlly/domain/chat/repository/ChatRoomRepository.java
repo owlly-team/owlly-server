@@ -2,6 +2,8 @@ package com.yongyong.owlly.domain.chat.repository;
 
 import com.yongyong.owlly.domain.chat.entity.ChatRoom;
 import java.util.Optional;
+import java.util.List;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -12,6 +14,10 @@ import org.springframework.data.repository.query.Param;
  * <p>방은 팟당 1개(party_id UNIQUE)라, 방 ID 로 팟을 되짚을 수 있다.
  */
 public interface ChatRoomRepository extends JpaRepository<ChatRoom, Long> {
+    Optional<ChatRoom> findByPartyId(Long partyId);
+
+    @Query("select r.partyId from ChatRoom r where r.status = com.yongyong.owlly.domain.chat.entity.RoomStatus.OPEN and r.partyId > :after order by r.partyId")
+    List<Long> findOpenPartyIdsAfter(@Param("after") Long after, Pageable page);
 
     /**
      * 이 방이 속한 팟 ID.

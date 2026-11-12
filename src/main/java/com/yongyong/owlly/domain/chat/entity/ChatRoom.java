@@ -46,4 +46,11 @@ public class ChatRoom extends BaseTimeEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private RoomStatus status;
+
+    public void close(Instant when) {
+        if (status == RoomStatus.CLOSED) return;
+        status = RoomStatus.CLOSED;
+        closedAt = when;
+        // 신고 증거 보존 정책이 연결되기 전에는 임의의 물리 삭제 시각을 정하지 않는다.
+    }
 }
