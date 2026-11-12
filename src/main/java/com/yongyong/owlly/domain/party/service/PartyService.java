@@ -30,6 +30,7 @@ import com.yongyong.owlly.domain.party.repository.RidePartyRepository;
 import com.yongyong.owlly.domain.region.dto.PickupPointResponse;
 import com.yongyong.owlly.domain.region.entity.PickupPoint;
 import com.yongyong.owlly.domain.region.repository.PickupPointRepository;
+import com.yongyong.owlly.domain.region.service.OutOfCityDetector;
 import com.yongyong.owlly.domain.region.service.PlaceNameReader;
 import com.yongyong.owlly.domain.settlement.service.SettlementEstimateService;
 import java.time.Duration;
@@ -80,6 +81,7 @@ public class PartyService {
     private final JourneyRepository journeyRepository;
     private final ChatRoomService chatRoomService;
     private final TaxiFareService taxiFareService;
+    private final OutOfCityDetector outOfCityDetector;
     private final SettlementEstimateService settlementEstimateService;
     private final NotificationService notificationService;
     private final EncryptedValueReader encryptedValueReader;
@@ -295,7 +297,10 @@ public class PartyService {
         List<GeoPoint> stops = dropOrder.stream()
                 .map(memberId -> encryptedValueReader.readDropoff(requestById.get(requestIdByMemberId.get(memberId))))
                 .toList();
-        RouteEstimate route = taxiFareService.estimateRoute(origin, stops, party.getDepartureAt());
+        boolean outOfCity = outOfCityDetector.isOutOfCity(pickupPoint.getAreaId(), dropOrder.stream()
+                .map(memberId -> requestById.get(requestIdByMemberId.get(memberId)).getDistrictId())
+                .toList());   // 남은 사람 중 하나라도 거점과 다른 시·군이면 시계 외 할증
+        RouteEstimate route = taxiFareService.estimateRoute(origin, stops, party.getDepartureAt(), outOfCity);
 
         int newRouteVersion = party.getRouteVersion() + 1;
         List<PartyStop> newStops = new ArrayList<>();
