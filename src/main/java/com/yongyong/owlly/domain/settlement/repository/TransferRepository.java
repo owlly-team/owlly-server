@@ -28,4 +28,16 @@ public interface TransferRepository extends JpaRepository<Transfer, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select t from Transfer t where t.id = :id")
     Optional<Transfer> findByIdForUpdate(@Param("id") Long id);
+
+    /**
+     * 이체가 속한 팟 ID. 이체 -> 정산 항목 -> 정산 -> 팟 순으로 잇는다.
+     * 예) 송금자/수취자 권한을 확인할 때, 세션 사용자가 그 팟의 참여자인지 보려고 팟을 먼저 구한다.
+     */
+    @Query("""
+            select s.partyId from Transfer t
+            join SettlementItem i on i.id = t.settlementItemId
+            join Settlement s on s.id = i.settlementId
+            where t.id = :transferId
+            """)
+    Optional<Long> findPartyIdById(@Param("transferId") Long transferId);
 }
