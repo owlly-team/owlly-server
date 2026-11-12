@@ -816,7 +816,7 @@
 
 **요청 본문:** 없음
 
-**처리·검증:** 대표에게 모든 개인 정산, 일반 멤버에게 본인 항목만 반환. 타인 환급 계좌와 정확한 경로는 포함하지 않음. 생성 전에는 409 SETTLEMENT_NOT_READY.
+**처리·검증:** 대표·일반 멤버 모두에게 팟 전원의 개인 정산 항목을 반환(정산내역-멤버 화면이 전원 분담·송금 현황을 보여줌). 타인 환급 계좌번호와 정확한 경로는 포함하지 않음(계좌번호는 응답 DTO에 없고 API-31로 인가된 송금자에게만). 생성 전에는 409 SETTLEMENT_NOT_READY.
 
 **업무 오류:** `409 SETTLEMENT_NOT_READY`
 
@@ -1525,6 +1525,10 @@
 | --- | --- | --- | --- |
 | `id` | string | 예 | 개인 정산 ID; 형식: `^[1-9][0-9]*$` |
 | `memberId` | string | 예 | 팟 참여 ID; 형식: `^[1-9][0-9]*$` |
+| `maskedName` | string / null | 예 | 마스킹 이름(예: 김*연). S-06 정산 표의 '이름' |
+| `distanceMeters` | integer / null | 예 | 출발지부터 이 멤버 하차까지 누적 거리(m). S-06 '구간'. 핀 없으면 null |
+| `isRepresentative` | boolean | 예 | 대표(마지막 하차자) 여부. 화면 '· 대표'·'결제함' 표기 |
+| `isMe` | boolean | 예 | 조회자 본인 여부. 화면 '나' 표기·'돌려받을 금액' 카드 |
 | `estimatedShareWon` | integer | 예 | 예상 부담; 최소 0 |
 | `prepayDueWon` | integer | 예 | 대표는 0; 최소 0 |
 | `actualShareWon` | integer / null | 예 | 최종 부담 |
@@ -1542,7 +1546,7 @@
 | `actualTotalWon` | integer / null | 예 | 실제 전체 요금 |
 | `routeVersion` | integer | 예 | 계산 경로 버전; 최소 1 |
 | `status` | string | 예 | 상태; ESTIMATED / PREPAYING / AWAITING_FARE / REFUNDING / COMPLETED / REVIEW_REQUIRED |
-| `items` | SettlementItem[] | 예 | 대표에게 전체; 일반 멤버에게 본인 항목만 |
+| `items` | SettlementItem[] | 예 | 대표·일반 멤버 모두 팟 전원 항목; 타인 계좌번호·정확한 경로 제외 |
 | `receiptAvailable` | boolean | 예 | 영수증 존재 여부 |
 | `finalizedAt` | string (date-time) / null | 예 | 정산 확정 |
 | `refundDueAt` | string (date-time) / null | 예 | 환급 기한 |
@@ -1755,7 +1759,7 @@
 
 ### 응답 예시
 
-응답은 호출자의 권한에 맞춰 달라집니다. 아래의 일반 멤버 정산에는 본인 항목만 있고, 대표의 확정 응답에는 전원 항목이 있습니다. 예시 날짜·만료 시각은 정책의 확정값이 아닙니다.
+정산 조회·확정 응답에는 호출자 권한과 무관하게 팟 전원의 개인 항목이 `items` 배열로 들어갑니다(타인 계좌번호·정확한 경로는 제외). 예시 날짜·만료 시각은 정책의 확정값이 아닙니다.
 
 ### GET /auth/session · 200 응답 예시
 
@@ -1777,6 +1781,8 @@
 
 ### GET /parties/{partyId}/settlement · 200 응답 예시
 
+조회자가 대표든 일반 멤버든 **팟 전원의 개인 항목이 `items` 배열로** 내려온다(타인 계좌번호·정확한 경로는 제외). 아래는 대표(503)와 일반 멤버(501)로 이뤄진 팟 예시.
+
 ```json
 {
   "data": {
@@ -1790,6 +1796,10 @@
       {
         "id": "10001",
         "memberId": "501",
+        "maskedName": "김*연",
+        "distanceMeters": 8000,
+        "isRepresentative": false,
+        "isMe": true,
         "estimatedShareWon": 5000,
         "prepayDueWon": 6000,
         "actualShareWon": 5000,
@@ -1819,6 +1829,20 @@
             "receivedAt": null
           }
         ]
+      },
+      {
+        "id": "10002",
+        "memberId": "503",
+        "maskedName": "이*준",
+        "distanceMeters": 16000,
+        "isRepresentative": true,
+        "isMe": false,
+        "estimatedShareWon": 25000,
+        "prepayDueWon": 0,
+        "actualShareWon": 25000,
+        "refundDueWon": 0,
+        "status": "COMPLETED",
+        "transfers": []
       }
     ],
     "receiptAvailable": true,
@@ -1844,6 +1868,10 @@
       {
         "id": "10001",
         "memberId": "501",
+        "maskedName": "김*연",
+        "distanceMeters": 8000,
+        "isRepresentative": false,
+        "isMe": false,
         "estimatedShareWon": 5000,
         "prepayDueWon": 6000,
         "actualShareWon": 5000,
@@ -1877,6 +1905,10 @@
       {
         "id": "10002",
         "memberId": "502",
+        "maskedName": "한*윤",
+        "distanceMeters": 12000,
+        "isRepresentative": false,
+        "isMe": false,
         "estimatedShareWon": 8750,
         "prepayDueWon": 10500,
         "actualShareWon": 8750,
@@ -1910,6 +1942,10 @@
       {
         "id": "10003",
         "memberId": "503",
+        "maskedName": "이*준",
+        "distanceMeters": 16000,
+        "isRepresentative": true,
+        "isMe": true,
         "estimatedShareWon": 16250,
         "prepayDueWon": 0,
         "actualShareWon": 16250,

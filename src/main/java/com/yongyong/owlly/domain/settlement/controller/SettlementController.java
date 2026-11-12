@@ -20,7 +20,8 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>로그인한 학생이 이 팟의 참여자일 때만 들어온다(아니면 404). 응답에 ETag 를 붙여
  * 이후 정산 전 하차 순서 수정 등에서 If-Match 로 쓸 수 있게 한다.
- * 대표는 전체·일반 멤버는 본인 항목만 보는 항목 필터는 Service 정책으로 둔다.
+ * 대표·일반 멤버 모두 팟 전원의 개인 항목을 본다('정산내역-멤버' 화면이 전원 분담·송금 현황을
+ * 보여줌). 타인 계좌번호는 응답 DTO 에 아예 없어 멤버별 필터링은 두지 않는다.
  */
 @RestController
 @RequestMapping("/api/v1/parties/{partyId}/settlement")
@@ -35,8 +36,9 @@ public class SettlementController {
     public ResponseEntity<ApiResponse<SettlementResponse>> getSettlement(
             @AuthenticationPrincipal SessionPrincipal principal,
             @PathVariable @Positive Long partyId) {
-        memberResolver.memberOfParty(partyId, principal.userId()); // 팟 참여자 확인(아니면 404)
-        SettlementResponse settlement = settlementService.getSettlement(partyId);
+        // 팟 참여자 확인(아니면 404). 반환된 멤버 ID 로 본인 항목(isMe)을 표시한다.
+        Long viewerMemberId = memberResolver.memberOfParty(partyId, principal.userId());
+        SettlementResponse settlement = settlementService.getSettlement(partyId, viewerMemberId);
         return ResponseEntity.ok().eTag(ETags.of(settlement)).body(ApiResponse.of(settlement));
     }
 }

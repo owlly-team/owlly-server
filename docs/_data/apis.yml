@@ -472,15 +472,33 @@ sections:
                 {
                   "id": "10001",
                   "memberId": "501",
+                  "maskedName": "김*연",
+                  "distanceMeters": 8000,
+                  "isRepresentative": false,
+                  "isMe": true,
                   "estimatedShareWon": 5000,
                   "prepayDueWon": 6000,
                   "actualShareWon": 5000,
                   "refundDueWon": 1000,
                   "status": "REFUND_PENDING",
                   "transfers": [
-                    { "id": "801", "kind": "PREPAY", "payerMemberId": "501", "payeeMemberId": "503", "amountWon": 6000, "status": "RECEIVED" },
-                    { "id": "802", "kind": "REFUND", "payerMemberId": "503", "payeeMemberId": "501", "amountWon": 1000, "status": "PENDING" }
+                    { "id": "801", "settlementItemId": "10001", "kind": "PREPAY", "payerMemberId": "501", "payeeMemberId": "503", "amountWon": 6000, "status": "RECEIVED", "sentAt": "2026-11-05T23:22:00+09:00", "receivedAt": "2026-11-05T23:23:00+09:00" },
+                    { "id": "802", "settlementItemId": "10001", "kind": "REFUND", "payerMemberId": "503", "payeeMemberId": "501", "amountWon": 1000, "status": "PENDING", "sentAt": null, "receivedAt": null }
                   ]
+                },
+                {
+                  "id": "10002",
+                  "memberId": "503",
+                  "maskedName": "이*준",
+                  "distanceMeters": 16000,
+                  "isRepresentative": true,
+                  "isMe": false,
+                  "estimatedShareWon": 25000,
+                  "prepayDueWon": 0,
+                  "actualShareWon": 25000,
+                  "refundDueWon": 0,
+                  "status": "COMPLETED",
+                  "transfers": []
                 }
               ],
               "receiptAvailable": true,
