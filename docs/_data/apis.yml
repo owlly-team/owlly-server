@@ -629,7 +629,7 @@ sections:
         method: GET
         path: /demand/candidates
         desc: 수요 지도·노선 후보 목록
-        status: 시작 전
+        status: 완료
         auth: 로그인 사용자 (AUTHENTICATED)
         success: "200 · data = DemandCandidate[]"
         req: |
@@ -655,7 +655,7 @@ sections:
         method: GET
         path: /demand/candidates/{id}
         desc: 노선 구간·근거 지표 상세
-        status: 시작 전
+        status: 완료
         auth: 로그인 사용자 (AUTHENTICATED)
         success: "200 · data = DemandCandidate"
         req: 없음
@@ -664,7 +664,7 @@ sections:
         method: GET
         path: /me/demand-contribution
         desc: 내 귀가 반영 횟수·후보 여부
-        status: 시작 전
+        status: 완료
         auth: 학생 (STUDENT)
         success: "200 · data = Contribution"
         req: |

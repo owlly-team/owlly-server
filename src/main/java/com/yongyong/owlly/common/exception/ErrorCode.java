@@ -84,7 +84,11 @@ public enum ErrorCode {
     SETTLEMENT_FINALIZED(HttpStatus.CONFLICT, "이미 확정된 정산은 바꿀 수 없습니다."),
     PREPAY_NOT_COMPLETED(HttpStatus.CONFLICT, "아직 수령 확인이 끝나지 않은 선송금이 있어요."),
     INVALID_STOP_ORDER(HttpStatus.UNPROCESSABLE_ENTITY, "하차 순서는 현재 멤버 전원을 한 번씩 담아야 합니다."),
-    REPRESENTATIVE_CHANGE_REQUIRES_POLICY(HttpStatus.CONFLICT, "마지막 하차자(대표) 변경은 정책 확정 전까지 할 수 없습니다.");
+    REPRESENTATIVE_CHANGE_REQUIRES_POLICY(HttpStatus.CONFLICT, "마지막 하차자(대표) 변경은 정책 확정 전까지 할 수 없습니다."),
+
+    // ===== 수요 지도·노선 후보 (demand) =====
+    DEMAND_NOT_READY(HttpStatus.CONFLICT, "아직 수요 산출이 준비되지 않았습니다."),
+    SCOPE_NOT_ALLOWED(HttpStatus.FORBIDDEN, "이 수요 데이터를 조회할 권한이 없습니다.");
 
     private final HttpStatus status;
     private final String message;

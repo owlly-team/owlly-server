@@ -67,4 +67,22 @@ public interface JourneyRepository extends JpaRepository<Journey, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select u from User u where u.id = :userId")
     Optional<User> lockUser(@Param("userId") Long userId);
+
+    /**
+     * 산출 기간 동안 내가 특정 거점→목적지로 남긴 귀가 수(수요 반영 횟수, API-45).
+     * 기간은 [startInclusive, endExclusive) 로 받는다.
+     */
+    @Query("""
+            select count(j) from Journey j
+            where j.userId = :userId
+              and j.pickupPointId = :pickupPointId
+              and j.destinationDongId = :destinationDongId
+              and j.intendedDepartureAt >= :startInclusive
+              and j.intendedDepartureAt < :endExclusive
+            """)
+    long countMyContribution(@Param("userId") Long userId,
+                             @Param("pickupPointId") Long pickupPointId,
+                             @Param("destinationDongId") Long destinationDongId,
+                             @Param("startInclusive") Instant startInclusive,
+                             @Param("endExclusive") Instant endExclusive);
 }
