@@ -87,4 +87,21 @@ public class Transfer extends BaseTimeEntity {
         this.status = TransferStatus.RECEIVED;
         this.receivedAt = receivedAt;
     }
+
+    /**
+     * 멤버 이탈로 경로가 바뀌어 아직 안 보낸(PENDING) 선송금 금액을 다시 맞출 때 쓴다(API-24).
+     * 이미 보냈거나 받은 송금은 서비스에서 먼저 걸러 바꾸지 않는다.
+     */
+    public void changeAmount(int amountWon) {
+        this.amountWon = amountWon;
+    }
+
+    /** 멤버 이탈로 더는 필요 없어진 PENDING 선송금을 취소한다(API-24). */
+    public void cancel() {
+        this.status = TransferStatus.CANCELLED;
+    }
+
+    public boolean isPending() {
+        return this.status == TransferStatus.PENDING;
+    }
 }

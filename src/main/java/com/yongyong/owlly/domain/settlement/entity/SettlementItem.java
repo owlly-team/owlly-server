@@ -58,4 +58,23 @@ public class SettlementItem extends BaseTimeEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private SettlementItemStatus status;
+
+    /**
+     * 멤버 이탈로 경로가 바뀌어 예상 분담·선송금을 다시 계산할 때 쓴다(API-24).
+     * 이미 선송금을 받은 멤버의 금액은 바꾸지 않도록 서비스에서 먼저 거른다.
+     */
+    public void reEstimate(int estimatedShareWon, int prepayDueWon) {
+        this.estimatedShareWon = estimatedShareWon;
+        this.prepayDueWon = prepayDueWon;
+    }
+
+    /**
+     * 실제 요금으로 개인 부담을 확정한다 (API-38).
+     * refundDueWon = 선송금 − 확정 분담(양수 환급, 음수 추가 납부). 차액이 남으면 REFUND_PENDING, 없으면 COMPLETED.
+     */
+    public void finalizeFare(int actualShareWon, int refundDueWon, SettlementItemStatus status) {
+        this.actualShareWon = actualShareWon;
+        this.refundDueWon = refundDueWon;
+        this.status = status;
+    }
 }

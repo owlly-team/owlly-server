@@ -77,7 +77,12 @@ public enum ErrorCode {
     SETTLEMENT_NOT_READY(HttpStatus.CONFLICT, "아직 정산이 생성되지 않았습니다."),
     ACCOUNT_NOT_REGISTERED(HttpStatus.CONFLICT, "수취 계좌가 아직 등록되지 않았습니다."),
     ACCOUNT_EXPIRED(HttpStatus.GONE, "수취 계좌가 만료되었습니다."),
-    TRANSFER_CANCELLED(HttpStatus.CONFLICT, "취소된 이체입니다.");
+    TRANSFER_CANCELLED(HttpStatus.CONFLICT, "취소된 이체입니다."),
+    FARE_LIMIT_EXCEEDED(HttpStatus.UNPROCESSABLE_ENTITY, "실제 요금이 예상 요금의 1.2배를 넘을 수 없습니다."),
+    ROUTE_VERSION_CONFLICT(HttpStatus.CONFLICT, "경로 버전이 최신과 달라 다시 확인해야 합니다."),
+    INVALID_ROUTE_DISTANCE(HttpStatus.CONFLICT, "구간 거리를 계산할 수 없어 분담액을 낼 수 없습니다."),
+    SETTLEMENT_FINALIZED(HttpStatus.CONFLICT, "이미 확정된 정산은 바꿀 수 없습니다."),
+    PREPAY_NOT_COMPLETED(HttpStatus.CONFLICT, "아직 수령 확인이 끝나지 않은 선송금이 있어요.");
 
     private final HttpStatus status;
     private final String message;

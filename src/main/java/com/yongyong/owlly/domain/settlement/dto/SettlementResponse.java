@@ -48,6 +48,10 @@ public record SettlementResponse(
     public record Item(
             Long id,                    // 개인 정산 항목 ID
             Long memberId,              // 부담 멤버(팟 참여 ID)
+            String maskedName,          // 마스킹 이름(예: 김*연). S-06 정산 표의 '이름'
+            Integer distanceMeters,     // 출발지부터 이 멤버 하차까지 누적 거리(m). S-06 '구간'. 핀 없으면 null
+            boolean isRepresentative,   // 대표(마지막 하차자) 여부. 화면 '· 대표' / '결제함' 표기
+            boolean isMe,               // 조회자 본인 여부. 화면 '나' 표기 + '돌려받을 금액' 카드
             int estimatedShareWon,      // 예상 부담액
             int prepayDueWon,           // 선송금해야 할 금액. 대표는 0
             Integer actualShareWon,     // 실제 요금 기준 부담액. 확정 전 null
@@ -56,11 +60,17 @@ public record SettlementResponse(
             List<TransferResponse> transfers  // 이 항목에 걸린 송금들(공용 DTO 재사용)
     ) {
 
-        /** 항목 엔티티 + 그 항목에 속한 이체 목록을 묶어 응답 한 줄로 만든다. */
-        public static Item from(SettlementItem item, List<TransferResponse> transfers) {
+        /** 항목 엔티티 + 이체 목록 + 화면용 부가값(이름·누적거리·대표/본인)을 묶어 응답 한 줄로 만든다. */
+        public static Item from(SettlementItem item, List<TransferResponse> transfers,
+                String maskedName, Integer distanceMeters,
+                boolean isRepresentative, boolean isMe) {
             return new Item(
                     item.getId(),
                     item.getMemberId(),
+                    maskedName,
+                    distanceMeters,
+                    isRepresentative,
+                    isMe,
                     item.getEstimatedShareWon(),
                     item.getPrepayDueWon(),
                     item.getActualShareWon(),
