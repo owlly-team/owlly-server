@@ -33,8 +33,9 @@ public interface PartyMemberRepository extends JpaRepository<PartyMember, Long> 
      * 예) 매칭 결과 화면의 멤버 목록(이름 일부·학교·하차 동·동성 여부)과 "내가 누구인지" 찾기.
      */
     /**
-     * 이 팟에서 해당 사용자의 참여(party_members.id).
+     * 이 팟에서 해당 사용자의 참여(party_members.id) 목록(오름차순).
      * 참여에는 user_id 가 없어서 참여 -> 신청 -> 귀가 로 사용자를 잇는다.
+     * 한 사용자가 여러 신청으로 같은 팟에 묶일 수 있어 여럿일 수 있다. 호출부에서 첫 번째를 고른다.
      * 예) 세션 사용자가 이 팟의 참여자인지 확인하고, 그의 멤버 ID 로 계좌·송금 권한을 판단할 때.
      */
     @Query("""
@@ -42,8 +43,9 @@ public interface PartyMemberRepository extends JpaRepository<PartyMember, Long> 
             join RideRequest r on r.id = m.requestId
             join Journey j on j.id = r.journeyId
             where m.partyId = :partyId and j.userId = :userId
+            order by m.id asc
             """)
-    Optional<Long> findMemberIdByPartyIdAndUserId(@Param("partyId") Long partyId, @Param("userId") Long userId);
+    List<Long> findMemberIdsByPartyIdAndUserId(@Param("partyId") Long partyId, @Param("userId") Long userId);
 
     @Query("""
             select new com.yongyong.owlly.domain.party.dto.PartyMemberRow(

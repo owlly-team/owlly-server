@@ -78,7 +78,9 @@ public enum ErrorCode {
     ROUTE_VERSION_CONFLICT(HttpStatus.CONFLICT, "경로 버전이 최신과 달라 다시 확인해야 합니다."),
     INVALID_ROUTE_DISTANCE(HttpStatus.CONFLICT, "구간 거리를 계산할 수 없어 분담액을 낼 수 없습니다."),
     SETTLEMENT_FINALIZED(HttpStatus.CONFLICT, "이미 확정된 정산은 바꿀 수 없습니다."),
-    PREPAY_NOT_COMPLETED(HttpStatus.CONFLICT, "아직 수령 확인이 끝나지 않은 선송금이 있어요.");
+    PREPAY_NOT_COMPLETED(HttpStatus.CONFLICT, "아직 수령 확인이 끝나지 않은 선송금이 있어요."),
+    INVALID_STOP_ORDER(HttpStatus.UNPROCESSABLE_ENTITY, "하차 순서는 현재 멤버 전원을 한 번씩 담아야 합니다."),
+    REPRESENTATIVE_CHANGE_REQUIRES_POLICY(HttpStatus.CONFLICT, "마지막 하차자(대표) 변경은 정책 확정 전까지 할 수 없습니다.");
 
     private final HttpStatus status;
     private final String message;

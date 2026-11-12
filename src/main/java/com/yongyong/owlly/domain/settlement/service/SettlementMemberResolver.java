@@ -25,9 +25,10 @@ public class SettlementMemberResolver {
     private final ChatRoomRepository chatRoomRepository;
     private final TransferRepository transferRepository;
 
-    /** 이 팟에서 사용자의 참여 멤버 ID. 참여자가 아니면 404. */
+    /** 이 팟에서 사용자의 참여 멤버 ID. 참여자가 아니면 404. 여러 참여가 묶이면 첫 번째를 쓴다. */
     public Long memberOfParty(Long partyId, Long userId) {
-        return partyMemberRepository.findMemberIdByPartyIdAndUserId(partyId, userId)
+        return partyMemberRepository.findMemberIdsByPartyIdAndUserId(partyId, userId)
+                .stream().findFirst()
                 .orElseThrow(() -> new OwllyException(ErrorCode.RESOURCE_NOT_FOUND));
     }
 
