@@ -461,9 +461,9 @@
 }
 ```
 
-**처리·검증:** 현재 GPS는 일시 계산만 하고 DB·접근 로그·분석 이벤트·오류 로그·캐시 키에 남기지 않음. 선택한 하차 핀도 이 API에서는 저장하지 않음. 외부자료 부족 시 해당 값 NULL 및 warnings. 모든 값은 추정.
+**처리·검증:** 현재 GPS는 일시 계산만 하고 DB·접근 로그·분석 이벤트·오류 로그·캐시 키에 남기지 않음. 선택한 하차 핀도 이 API에서는 저장하지 않음. 외부자료 부족 시 해당 값 NULL 및 warnings. 모든 값은 추정. **막차**: 경기도 GBIS는 노선별 막차 시각만 주고 출발지→도착지 길찾기가 없어서, 안내할 구간(거점 + 도착 구 → 노선·승하차 정류장)을 미리 정해 둔다. 지금은 시연 구간 하나(단국대 정문 거점 → 수원시 영통구, 720-3번 순환, 종점 출발 막차 + 정류장까지 임시 5분, 버스 임시 40분, 1,550원)이고 정류장별 소요 시간은 임시 값. 정류장 출발 시각에서 도보 시간(직선 거리 × 1.3 ÷ 분당 70m, 현재 위치가 없으면 거점 기준)과 여유 5분을 뺀 시각이 `lastLeaveAt`(화면정의서 홈·막차 전: 출발해야 할 시각 = 막차 출발 − 도보 시간 − 5분). 목록에 없는 구간, 막차가 끊긴 뒤, GBIS 장애·막차 정보 없음이면 `transit.available=false`(오류 아님)이고 안내 가능한 사유는 `warnings`. 막차 시각은 서버 메모리에 6시간 캐시. 요일은 평일·토·일만 가르고 공휴일은 아직 평일로 본다. **혼자 택시**: 지금 출발 기준(화면정의서 "지금 출발")으로 요금·거리·소요 시간·도착 시각; 소요 시간을 모르면 도착 시각만 null. 심야할증(출발 시각 23:00~04:00, 30%)과 시계 외 할증(거점과 하차 지점의 시·군이 다르면 20%; 경계 위치는 보지 않고 전체 요금에 적용하는 어림)을 반영하고, 둘이 같이 걸리면 할증률을 더해서(50%) 곱한다. 시계 외이면 `warnings`에 알린다. 통행료에는 할증을 곱하지 않는다. **동승**: 지금 등록할 수 있는 가장 가까운 시간대(`nearestPoolSlot`)의 대기 인원이 1명 이상이면 "혼자 택시 요금 ÷ (대기 인원 + 나, 최대 4명)"을 100원 단위로 올린 값을 `poolEstimatedShareWon`(추정; 대기 0명이면 null).
 
-**업무 오류:** `422 LOCATION_UNRESOLVABLE`, `503 UPSTREAM_UNAVAILABLE`
+**업무 오류:** `404 RESOURCE_NOT_FOUND`, `403 FORBIDDEN`, `422 LOCATION_UNRESOLVABLE`, `503 UPSTREAM_UNAVAILABLE`(하차 핀을 행정동으로 바꾸는 카카오 장애; 막차·택시 외부 자료 부족은 오류가 아니라 warnings)
 
 **ERD 연결:** `pickup_points`, `student_profiles`, `ride_requests`
 
@@ -1276,6 +1276,9 @@
 | `toName` | string | 예 | 도착 지점 |
 | `departureAt` | string (date-time) | 예 | 구간 출발 |
 | `arrivalAt` | string (date-time) | 예 | 구간 도착 |
+| `distanceM` | integer / null | 예 | 걷는 구간 거리(m); 버스 구간이면 null |
+| `stopCount` | integer / null | 예 | 버스로 가는 정류장 수; 걷기면 null |
+| `lastBus` | boolean | 예 | 오늘 이 방향 마지막 버스인지 |
 
 ### TransitOption
 
@@ -1284,8 +1287,9 @@
 | `available` | boolean | 예 | 안내 가능한 막차 존재 여부 |
 | `lastLeaveAt` | string (date-time) / null | 예 | 현재 위치 기준 출발 마감; 위치 없으면 거점 기준 |
 | `arrivalAt` | string (date-time) / null | 예 | 예상 도착 |
-| `estimatedCostWon` | integer / null | 예 | 예상 교통비 |
-| `legs` | TransitLeg[] | 예 | 제공 가능한 환승 경로 |
+| `estimatedCostWon` | integer / null | 예 | 예상 교통비(1인, 교통카드 기준) |
+| `totalDurationMin` | integer / null | 예 | 버스를 탄 뒤 도착까지 걸리는 분(화면의 큰 글씨 "43분"; 정의 확인 필요) |
+| `legs` | TransitLeg[] | 예 | 제공 가능한 환승 경로(걷기 → 버스 → 걷기) |
 | `sourceLabel` | string | 예 | 출처와 관측·추정 구분 |
 | `asOf` | string (date-time) | 예 | 자료 확인 시각 |
 
@@ -1294,11 +1298,16 @@
 | 필드 | 타입 | 필수 | 의미·제약 |
 | --- | --- | --- | --- |
 | `transit` | TransitOption | 예 | 해당 DTO 참조 |
-| `soloTaxiEstimatedWon` | integer / null | 예 | 혼자 택시 추정 비용 |
-| `poolEstimatedShareWon` | integer / null | 예 | 아직 팟이 없으면 조건별 추정 |
-| `estimatedArrivalAt` | string (date-time) / null | 예 | 택시 예상 도착 |
+| `soloTaxiEstimatedWon` | integer / null | 예 | 혼자 택시 지금 출발 추정 비용 |
+| `soloTaxiDistanceM` | integer / null | 예 | 혼자 택시 거리(m) |
+| `soloTaxiDurationMin` | integer / null | 예 | 혼자 택시 걸리는 분 |
+| `estimatedArrivalAt` | string (date-time) / null | 예 | 택시로 지금 출발하면 도착하는 시각 |
+| `poolEstimatedShareWon` | integer / null | 예 | 동승하면 1인 추정 분담액; 가장 가까운 시간대 대기 인원이 없으면 null |
+| `nearestPoolSlot` | MatchingSlot / null | 예 | 지금 등록할 수 있는 가장 가까운 동승 시간대와 대기 인원 |
 | `destinationDongId` | string | 예 | 핀으로 판별한 동; 형식: `^[1-9][0-9]*$` |
+| `destinationDongName` | string | 예 | 하차 동 이름 |
 | `districtId` | string | 예 | 구 또는 구가 없는 시; 형식: `^[1-9][0-9]*$` |
+| `districtName` | string | 예 | 구(시) 이름 |
 | `asOf` | string (date-time) | 예 | 추정 기준 시각 |
 | `warnings` | string[] | 예 | 불확실성 안내 |
 
