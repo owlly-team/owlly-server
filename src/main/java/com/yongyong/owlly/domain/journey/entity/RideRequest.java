@@ -80,4 +80,28 @@ public class RideRequest extends BaseTimeEntity {
     /** 결과 안내 마감. 산정식 미확정. */
     @Column(name = "result_due_at")
     private Instant resultDueAt;
+
+    /**
+     * 매칭 대기 중인 신청을 취소한다(WAITING → CANCELLED).
+     * 예) 매칭 대기 중 학생이 "등록 취소"를 누를 때. 취소할 수 있는 상태인지는 서비스에서 먼저 확인한다.
+     */
+    public void cancel() {
+        this.status = RideRequestStatus.CANCELLED;
+    }
+
+    /**
+     * 팟에 배정됐다(WAITING → MATCHED).
+     * 예) 매칭 작업이 같은 조건 학생 2~4명을 한 팟으로 묶었을 때.
+     */
+    public void match() {
+        this.status = RideRequestStatus.MATCHED;
+    }
+
+    /**
+     * 같이 탈 사람을 찾지 못했다(WAITING → FAILED).
+     * 예) 결과 안내 시각에 같은 조건 신청자가 혼자뿐일 때. 학생은 막차·혼자 택시를 고르거나 다시 신청한다.
+     */
+    public void fail() {
+        this.status = RideRequestStatus.FAILED;
+    }
 }

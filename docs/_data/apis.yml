@@ -1,0 +1,731 @@
+# 상태를 바꾸려면 해당 항목의 status 값을 시작 전 / 진행 중 / 대기 / 완료 중 하나로 고치세요.
+# 대기일 때는 waitingFor 에 기다리는 것(예: 인증, 외부 키, 정책)을, waitingNote 에 자세한 설명을 적어 주세요.
+# 표·전체 진행률·개인별 진행률이 모두 자동으로 다시 계산됩니다.
+# req/res/error 는 api.md(명세) 기준 참고 정보입니다.
+owners:
+  - 강나연
+  - 박기범
+  - 안시현
+
+sections:
+  - name: 인증·기준정보
+    owner: 강나연
+    items:
+      - id: API-01
+        method: GET
+        path: /universities
+        desc: 참여 대학·인증 도메인 조회
+        status: 완료
+        auth: 비로그인 (PUBLIC)
+        success: "200 · data = University[]"
+        req: 없음
+        errors: []
+      - id: API-02
+        method: GET
+        path: /profile-options
+        desc: 프로필 선택값 조회
+        status: 완료
+        auth: 비로그인 (PUBLIC)
+        success: "200 · data = ProfileOptions"
+        req: 없음
+        errors: []
+      - id: API-05
+        method: POST
+        path: /auth/email-verifications
+        desc: 학교 이메일 인증번호 발급·재발급
+        status: 완료
+        auth: 비로그인 (PUBLIC) · Idempotency-Key 필수
+        success: "202 · data = EmailVerification"
+        req: |
+          application/json · EmailVerificationRequest
+          {
+            "universityId": "1",
+            "email": "student@university.example"
+          }
+        errors: ["422 EMAIL_DOMAIN_NOT_ALLOWED", "409 IDEMPOTENCY_CONFLICT", "410 VERIFICATION_EXPIRED", "429 RATE_LIMITED", "503 EMAIL_DELIVERY_UNAVAILABLE", "503 POLICY_NOT_CONFIGURED"]
+      - id: API-06
+        method: POST
+        path: /auth/email-verifications/{id}/verify
+        desc: 이메일 코드 검증
+        status: 완료
+        auth: 비로그인 (PUBLIC) · Idempotency-Key 필수
+        success: "200 · data = VerificationGrant"
+        req: |
+          application/json · CodeVerificationRequest
+          {
+            "code": "123456"
+          }
+        errors: ["422 INVALID_VERIFICATION_CODE", "404 RESOURCE_NOT_FOUND", "409 IDEMPOTENCY_CONFLICT", "410 VERIFICATION_EXPIRED", "409 VERIFICATION_USED", "429 RATE_LIMITED", "503 POLICY_NOT_CONFIGURED"]
+      - id: API-07
+        method: POST
+        path: /auth/student-registrations
+        desc: 학생 가입·프로필 생성
+        status: 완료
+        auth: 비로그인 (PUBLIC) · Idempotency-Key 필수
+        success: "201 · data = Session"
+        req: |
+          application/json · StudentRegistration
+          {
+            "verificationToken": "example-one-time-proof",
+            "profile": {
+              "realName": "김나연",
+              "genderCode": "FEMALE",
+              "sameGenderDefault": true,
+              "defaultDropoff": { "latitude": 37.33, "longitude": 127.27 }
+            }
+          }
+        errors: ["410 VERIFICATION_EXPIRED", "409 VERIFICATION_USED", "409 ACCOUNT_ALREADY_EXISTS", "409 IDEMPOTENCY_CONFLICT", "422 EMAIL_DOMAIN_NOT_ALLOWED", "422 INVALID_GENDER_CODE", "422 LOCATION_UNRESOLVABLE", "422 VALIDATION_ERROR", "403 FORBIDDEN", "403 ACCOUNT_SUSPENDED", "403 ACCOUNT_UNAVAILABLE", "503 POLICY_NOT_CONFIGURED", "503 UPSTREAM_UNAVAILABLE"]
+      - id: API-08
+        method: POST
+        path: /auth/student-sessions
+        desc: 학생 재로그인
+        status: 완료
+        auth: 비로그인 (PUBLIC) · Idempotency-Key 필수
+        success: "200 · data = Session"
+        req: |
+          application/json · StudentLogin
+          {
+            "verificationToken": "example-one-time-proof"
+          }
+        errors: ["404 ACCOUNT_NOT_FOUND", "410 VERIFICATION_EXPIRED", "409 VERIFICATION_USED", "409 IDEMPOTENCY_CONFLICT", "422 VALIDATION_ERROR", "403 FORBIDDEN", "403 ACCOUNT_SUSPENDED", "403 ACCOUNT_UNAVAILABLE", "503 POLICY_NOT_CONFIGURED"]
+      - id: API-09
+        method: POST
+        path: /auth/staff-sessions
+        desc: 관계자 로그인
+        status: 완료
+        auth: 비로그인 (PUBLIC) · Idempotency-Key 필수
+        success: "200 · data = Session"
+        req: |
+          application/json · StaffLogin
+          {
+            "email": "staff@university.example",
+            "password": "example-password-only"
+          }
+        errors: ["401 INVALID_CREDENTIALS", "429 RATE_LIMITED", "403 ACCOUNT_SUSPENDED", "403 ACCOUNT_UNAVAILABLE", "409 IDEMPOTENCY_CONFLICT", "422 VALIDATION_ERROR", "403 FORBIDDEN", "503 POLICY_NOT_CONFIGURED"]
+      - id: API-10
+        method: GET
+        path: /auth/session
+        desc: 현재 계정·세션 확인
+        status: 완료
+        auth: 로그인 사용자 (AUTHENTICATED)
+        success: "200 · data = Session"
+        req: 없음
+        res: |
+          {
+            "data": {
+              "user": {
+                "id": "101",
+                "universityId": "1",
+                "universityName": "한국외국어대학교",
+                "email": "student@university.example",
+                "role": "STUDENT",
+                "status": "ACTIVE"
+              },
+              "expiresAt": "2026-11-06T02:00:00+09:00",
+              "csrfToken": "example-csrf-token"
+            }
+          }
+        errors: []
+      - id: API-11
+        method: DELETE
+        path: /auth/session
+        desc: 로그아웃
+        status: 완료
+        auth: 로그인 사용자 (AUTHENTICATED) · Idempotency-Key 필수 · 이미 세션이 없는 재시도도 204
+        success: "204 · 응답 본문 없음"
+        req: 없음
+        errors: []
+
+  - name: 프로필
+    owner: 강나연
+    items:
+      - id: API-12
+        method: GET
+        path: /me/profile
+        desc: 내 프로필 조회
+        status: 완료
+        auth: 학생 (STUDENT) · ETag
+        success: "200 · data = StudentProfile"
+        req: 없음
+        errors: ["401 UNAUTHENTICATED", "403 FORBIDDEN", "403 ACCOUNT_SUSPENDED", "403 ACCOUNT_UNAVAILABLE", "404 RESOURCE_NOT_FOUND"]
+      - id: API-13
+        method: PATCH
+        path: /me/profile
+        desc: 내 프로필 수정
+        status: 완료
+        auth: 학생 (STUDENT) · Idempotency-Key · If-Match · X-CSRF-Token 필수
+        success: "200 · data = StudentProfile"
+        req: |
+          application/json · ProfilePatch
+          {
+            "sameGenderDefault": true,
+            "defaultDropoff": { "latitude": 37.33, "longitude": 127.27 }
+          }
+        errors: ["401 UNAUTHENTICATED", "403 FORBIDDEN", "403 ACCOUNT_SUSPENDED", "403 ACCOUNT_UNAVAILABLE", "404 RESOURCE_NOT_FOUND", "409 IDEMPOTENCY_CONFLICT", "412 PRECONDITION_FAILED", "428 PRECONDITION_REQUIRED", "422 VALIDATION_ERROR", "422 LOCATION_UNRESOLVABLE", "503 UPSTREAM_UNAVAILABLE", "503 POLICY_NOT_CONFIGURED"]
+
+  - name: 거점·귀가
+    owner: 박기범
+    items:
+      - id: API-04
+        method: GET
+        path: /pickup-points
+        desc: 고정 출발 거점 목록
+        status: 완료
+        auth: 학생 (STUDENT)
+        success: "200 · data = PickupPoint[]"
+        req: |
+          Query 파라미터
+          universityId (string, 선택) — 학교 거점 필터, 공용 거점 포함
+        errors: []
+      - id: API-14
+        method: POST
+        path: /travel-options
+        desc: 막차·동승·혼자 택시 비교
+        status: 완료
+        auth: 학생 (STUDENT)
+        success: "200 · data = TravelOptions"
+        req: |
+          application/json · TravelOptionsRequest
+          {
+            "pickupPointId": "11",
+            "dropoff": { "latitude": 37.33, "longitude": 127.27 },
+            "departureAt": "2026-11-05T23:30:00+09:00",
+            "currentLocation": { "latitude": 37.331, "longitude": 127.271 }
+          }
+        errors: ["404 RESOURCE_NOT_FOUND", "403 FORBIDDEN", "422 LOCATION_UNRESOLVABLE", "503 UPSTREAM_UNAVAILABLE"]
+      - id: API-15
+        method: POST
+        path: /journeys
+        desc: 한 번의 귀가 의도 생성
+        status: 완료
+        auth: 학생 (STUDENT) · Idempotency-Key 필수
+        success: "201 · data = Journey"
+        req: |
+          application/json · JourneyCreate
+          {
+            "clientJourneyKey": "0b18e222-668f-4b29-a013-6f1169e7a001",
+            "pickupPointId": "11",
+            "dropoff": { "latitude": 37.33, "longitude": 127.27 },
+            "intendedDepartureAt": "2026-11-05T23:30:00+09:00"
+          }
+        errors: ["409 ACTIVE_JOURNEY_CONFLICT", "422 LOCATION_UNRESOLVABLE", "409 IDEMPOTENCY_CONFLICT"]
+      - id: API-16
+        method: GET
+        path: /me/journeys
+        desc: 내 귀가 기록 조회
+        status: 완료
+        auth: 학생 (STUDENT)
+        success: "200 · data = Journey[]"
+        req: |
+          Query 파라미터
+          cursor (string, 선택), limit (integer, 선택, 1~100, 기본 20)
+        errors: []
+      - id: API-17
+        method: PUT
+        path: /journeys/{id}/choice
+        desc: 막차 또는 혼자 택시 선택 기록
+        status: 완료
+        auth: 해당 귀가의 학생 (OWNER_JOURNEY) · Idempotency-Key 필수
+        success: "200 · data = Journey"
+        req: |
+          application/json · JourneyChoice
+          {
+            "mode": "BUS"
+          }
+        errors: ["409 PARTY_LEAVE_REQUIRED", "409 JOURNEY_ALREADY_RESOLVED"]
+
+  - name: 동승·매칭
+    owner: 박기범
+    items:
+      - id: API-18
+        method: GET
+        path: /matching-slots
+        desc: 조건별 출발 슬롯·대기 수 조회
+        status: 완료
+        auth: 학생 (STUDENT)
+        success: "200 · data = MatchingSlot[]"
+        req: |
+          Query 파라미터 (전부 필수)
+          pickupPointId (string), destinationDongId (string),
+          date (date), sameGenderOnly (boolean)
+        errors: ["503 POLICY_NOT_CONFIGURED"]
+      - id: API-19
+        method: POST
+        path: /journeys/{id}/ride-requests
+        desc: 동승 신청·실패 후 재등록
+        status: 완료
+        auth: 해당 귀가의 학생 (OWNER_JOURNEY) · Idempotency-Key 필수
+        success: "201 · data = RideRequest"
+        req: |
+          application/json · RideRequestCreate
+          {
+            "clientRequestKey": "0b18e222-668f-4b29-a013-6f1169e7a002",
+            "pickupPointId": "11",
+            "dropoff": { "latitude": 37.33, "longitude": 127.27 },
+            "departureAt": "2026-11-05T23:30:00+09:00",
+            "sameGenderOnly": true
+          }
+        errors: ["409 ACTIVE_REQUEST_EXISTS", "409 JOURNEY_ALREADY_RESOLVED", "422 INVALID_DEPARTURE_SLOT", "409 UNSETTLED_RIDE_RESTRICTION", "503 POLICY_NOT_CONFIGURED"]
+      - id: API-20
+        method: GET
+        path: /ride-requests/{id}
+        desc: 신청·매칭 결과 조회
+        status: 완료
+        auth: 해당 신청의 학생 (OWNER_REQUEST) · ETag
+        success: "200 · data = RideRequest"
+        req: 없음
+        errors: []
+      - id: API-21
+        method: POST
+        path: /ride-requests/{id}/cancel
+        desc: 대기 신청 취소
+        status: 완료
+        auth: 해당 신청의 학생 (OWNER_REQUEST) · Idempotency-Key 필수
+        success: "200 · data = RideRequest"
+        req: 없음
+        errors: ["409 REQUEST_ALREADY_MATCHED", "409 INVALID_STATE"]
+      - id: API-22
+        method: GET
+        path: /parties/{id}
+        desc: 팟·멤버·대표·다음 행동 조회
+        status: 완료
+        auth: 해당 팟 참여자 (PARTY_MEMBER) · ETag
+        success: "200 · data = Party"
+        req: 없음
+        errors: []
+      - id: API-23
+        method: POST
+        path: /parties/{id}/confirm
+        desc: 본인 팟 확정
+        status: 완료
+        auth: 해당 팟 참여자 (PARTY_MEMBER) · Idempotency-Key · If-Match 필수
+        success: "200 · data = Party"
+        req: 없음
+        errors: ["409 CONFIRMATION_DEADLINE_PASSED", "409 INVALID_STATE", "503 POLICY_NOT_CONFIGURED"]
+      - id: API-24
+        method: POST
+        path: /parties/{id}/leave
+        desc: 팟 거절·이탈
+        status: 완료
+        auth: 해당 팟 참여자 (PARTY_MEMBER) · Idempotency-Key · If-Match 필수
+        success: "200 · data = Party"
+        req: 없음
+        errors: ["409 CANCELLATION_DEADLINE_PASSED", "409 FUNDS_ALREADY_IN_FLIGHT", "503 POLICY_NOT_CONFIGURED"]
+      - id: API-25
+        method: POST
+        path: /parties/{id}/taxi-call-confirmation
+        desc: 대표의 외부 택시 호출 확인
+        status: 완료
+        auth: 해당 팟 대표 (REPRESENTATIVE) · Idempotency-Key · If-Match 필수
+        success: "200 · data = Party"
+        req: 없음
+        errors: ["403 FORBIDDEN", "409 INVALID_STATE"]
+      - id: API-26
+        method: POST
+        path: /parties/{id}/boarding
+        desc: 본인 탑승·미탑승 기록
+        status: 완료
+        auth: 해당 팟 참여자 (PARTY_MEMBER) · Idempotency-Key 필수
+        success: "200 · data = Party"
+        req: |
+          application/json · BoardingRequest
+          {
+            "status": "BOARDED"
+          }
+        errors: ["409 BOARDING_NOT_ALLOWED", "409 BOARDING_ALREADY_RECORDED", "503 POLICY_NOT_CONFIGURED"]
+
+  - name: 채팅·신고
+    owner: 강나연
+    items:
+      - id: API-27
+        method: GET
+        path: /parties/{id}/room
+        desc: 팟 채팅방·확인 코드 조회
+        status: 완료
+        auth: 확정된 팟 참여자 (PARTY_MEMBER) · 대표는 PREPAY_RECEIVE 계좌 등록 후 입장
+        success: "200 · data = Room"
+        req: |
+          본문 없음 · 로그인 세션 쿠키 필요
+          첫 개인 확정 시 방 생성, 전원 확정을 기다리지 않음
+          대표 계좌 등록용 roomId는 API-22/23 응답 사용
+          출발 +1시간과 대표 정산 확정 중 늦은 시각에 종료, 정산 미확정이면 연장
+          종료 후 조회 불가. deleteAfter=null (신고 사본은 API-30에서 별도 7일 보존·정리)
+        errors: ["401 UNAUTHENTICATED", "403 FORBIDDEN", "403 ACCOUNT_SUSPENDED", "404 RESOURCE_NOT_FOUND", "409 ROOM_NOT_READY", "410 ROOM_ACCESS_EXPIRED"]
+      - id: API-28
+        method: GET
+        path: /rooms/{id}/messages
+        desc: 채팅 이력·새 메시지 조회
+        status: 완료
+        auth: 확정된 방 참여자 (ROOM_MEMBER) · 대표는 계좌 등록 후
+        success: "200 · data = Message[]"
+        req: |
+          Query 파라미터
+          afterId (string, 선택), beforeId (string, 선택) — 동시 입력 금지
+          limit (integer, 선택, 1~100, 기본 50)
+          최초/과거 조회는 ID 내림차순, afterId 신규 조회는 오름차순
+          빈 결과의 latestId=null이면 기존 신규 조회 기준 ID 유지
+        res: |
+          {
+            "data": [
+              {
+                "id": "701",
+                "roomId": "601",
+                "senderMemberId": "501",
+                "messageType": "USER",
+                "body": "집결 장소에 도착했어요.",
+                "createdAt": "2026-11-05T23:20:00+09:00"
+              }
+            ],
+            "meta": { "nextBeforeId": null, "latestId": "701", "hasMore": false }
+          }
+        errors: ["401 UNAUTHENTICATED", "403 FORBIDDEN", "403 ACCOUNT_SUSPENDED", "404 RESOURCE_NOT_FOUND", "409 ROOM_NOT_READY", "410 ROOM_ACCESS_EXPIRED", "422 VALIDATION_ERROR"]
+      - id: API-29
+        method: POST
+        path: /rooms/{id}/messages
+        desc: 채팅 메시지 전송
+        status: 완료
+        auth: 확정된 방 참여자 (ROOM_MEMBER) · 대표는 계좌 등록 후 · Idempotency-Key와 X-CSRF-Token 필수
+        success: "201 · data = Message"
+        req: |
+          application/json · MessageCreate
+          {
+            "clientMessageId": "0b18e222-668f-4b29-a013-6f1169e7a003",
+            "text": "집결 장소에 도착했어요."
+          }
+          text: JSON 문자열, 1~200자(Java 문자열 길이), 공백만 입력 불가
+          번호·링크·계좌를 '가려진 번호'로 치환 후 저장·응답
+          동일 전송 재시도는 키·clientMessageId·본문 유지
+        errors: ["401 UNAUTHENTICATED", "403 FORBIDDEN", "403 ACCOUNT_SUSPENDED", "404 RESOURCE_NOT_FOUND", "409 ROOM_NOT_READY", "409 ROOM_CLOSED", "422 VALIDATION_ERROR", "422 MESSAGE_REJECTED", "409 IDEMPOTENCY_CONFLICT", "503 POLICY_NOT_CONFIGURED"]
+      - id: API-30
+        method: POST
+        path: /rooms/{id}/reports
+        desc: 멤버·메시지 신고
+        status: 완료
+        auth: 확정된 방 참여자 (ROOM_MEMBER) · 대표는 계좌 등록 후 · UUID Idempotency-Key와 X-CSRF-Token 필수
+        success: "201 · data = SafetyReport"
+        req: |
+          application/json · ReportCreate
+          {
+            "targetMemberId": "502",
+            "reasonCode": "PRIVACY_REQUEST",
+            "messageId": "702",
+            "details": "개인 연락처를 요구했어요."
+          }
+          details: 선택 JSON 문자열, 최대 200자(Java 문자열 길이). OTHER도 선택
+          같은 방·같은 신고자·같은 대상은 1회. 다른 방·역방향 신고는 별개
+          동일 키·원문 재시도는 기존 결과 반환. 변경 요청은 충돌
+          신고 시점까지 전체 대화 사본·설명을 마스킹·암호화해 신고별 접수 +7일에 정리
+          사본 삭제 후에도 재매칭 차단·중복 방지 기록 유지. 자동 제재·캡처 업로드 없음
+        res: |
+          {
+            "data": {
+              "id": "801",
+              "status": "RECEIVED",
+              "evidenceDeleteAfter": "2026-11-12T23:21:00+09:00",
+              "rematchingBlocked": true
+            }
+          }
+        errors: ["401 UNAUTHENTICATED", "403 FORBIDDEN", "403 ACCOUNT_SUSPENDED", "404 RESOURCE_NOT_FOUND", "409 ROOM_NOT_READY", "409 ROOM_CLOSED", "409 REPORT_ALREADY_EXISTS", "409 IDEMPOTENCY_CONFLICT", "422 VALIDATION_ERROR", "422 INVALID_REPORT_TARGET", "503 POLICY_NOT_CONFIGURED"]
+
+  - name: 계좌·정산
+    owner: 안시현
+    items:
+      - id: API-03
+        method: GET
+        path: /banks
+        desc: 수취 계좌 은행 목록
+        status: 완료
+        auth: 학생 (STUDENT)
+        success: "200 · data = Bank[]"
+        req: 없음
+        errors: []
+      - id: API-31
+        method: PUT
+        path: /rooms/{id}/accounts/{purpose}
+        desc: 내 선송금·환급 수취 계좌 등록
+        status: 완료
+        auth: 본인 계좌의 팟 참여자 (ACCOUNT_OWNER) · Idempotency-Key 필수
+        success: "200 · data = MaskedAccount"
+        req: |
+          application/json · AccountInput
+          {
+            "bankCode": "DEMO",
+            "accountNumber": "000000000000",
+            "holderName": "박대표"
+          }
+        errors: ["403 ACCOUNT_PURPOSE_NOT_ALLOWED", "409 ACCOUNT_LOCKED", "409 ROOM_CLOSED"]
+      - id: API-32
+        method: GET
+        path: /transfers/{id}/recipient-account
+        desc: 송금할 수취 계좌 조회
+        status: 완료
+        auth: 해당 이체의 송금자 (TRANSFER_PAYER)
+        success: "200 · data = RecipientAccount (Cache-Control no-store)"
+        req: 없음
+        errors: ["409 ACCOUNT_NOT_REGISTERED", "410 ACCOUNT_EXPIRED"]
+      - id: API-33
+        method: GET
+        path: /parties/{id}/settlement
+        desc: 예상·선송금·최종 정산 조회
+        status: 완료
+        auth: 해당 팟 참여자 (PARTY_MEMBER) · ETag
+        success: "200 · data = Settlement"
+        req: 없음
+        res: |
+          {
+            "data": {
+              "id": "901",
+              "partyId": "401",
+              "estimatedTotalWon": 30000,
+              "actualTotalWon": 30000,
+              "routeVersion": 2,
+              "status": "REFUNDING",
+              "items": [
+                {
+                  "id": "10001",
+                  "memberId": "501",
+                  "maskedName": "김*연",
+                  "distanceMeters": 8000,
+                  "isRepresentative": false,
+                  "isMe": true,
+                  "estimatedShareWon": 5000,
+                  "prepayDueWon": 6000,
+                  "actualShareWon": 5000,
+                  "refundDueWon": 1000,
+                  "status": "REFUND_PENDING",
+                  "transfers": [
+                    { "id": "801", "settlementItemId": "10001", "kind": "PREPAY", "payerMemberId": "501", "payeeMemberId": "503", "amountWon": 6000, "status": "RECEIVED", "sentAt": "2026-11-05T23:22:00+09:00", "receivedAt": "2026-11-05T23:23:00+09:00" },
+                    { "id": "802", "settlementItemId": "10001", "kind": "REFUND", "payerMemberId": "503", "payeeMemberId": "501", "amountWon": 1000, "status": "PENDING", "sentAt": null, "receivedAt": null }
+                  ]
+                },
+                {
+                  "id": "10002",
+                  "memberId": "503",
+                  "maskedName": "이*준",
+                  "distanceMeters": 16000,
+                  "isRepresentative": true,
+                  "isMe": false,
+                  "estimatedShareWon": 25000,
+                  "prepayDueWon": 0,
+                  "actualShareWon": 25000,
+                  "refundDueWon": 0,
+                  "status": "COMPLETED",
+                  "transfers": []
+                }
+              ],
+              "receiptAvailable": true,
+              "finalizedAt": "2026-11-06T00:10:00+09:00",
+              "refundDueAt": "2026-11-13T00:10:00+09:00",
+              "allowedActions": []
+            }
+          }
+        errors: ["409 SETTLEMENT_NOT_READY"]
+      - id: API-36
+        method: PATCH
+        path: /parties/{id}/settlement/route
+        desc: 정산 전 실제 하차 순서 수정
+        status: 완료
+        auth: 해당 팟 대표 (REPRESENTATIVE) · Idempotency-Key · If-Match 필수
+        success: "200 · data = Settlement"
+        req: |
+          application/json · RoutePatch
+          {
+            "orderedMemberIds": ["501", "502", "503"],
+            "expectedRouteVersion": 1
+          }
+        errors: ["409 ROUTE_VERSION_CONFLICT", "422 INVALID_STOP_ORDER", "409 REPRESENTATIVE_CHANGE_REQUIRES_POLICY", "409 SETTLEMENT_FINALIZED", "503 UPSTREAM_UNAVAILABLE"]
+      - id: API-37
+        method: POST
+        path: /parties/{id}/settlement/preview
+        desc: 실제 요금 분담·환급 미리보기
+        status: 완료
+        auth: 해당 팟 대표 (REPRESENTATIVE)
+        success: "200 · data = FarePreview (저장 안 함)"
+        req: |
+          application/json · FareInput
+          {
+            "actualTotalWon": 30000,
+            "routeVersion": 2
+          }
+        errors: ["403 FORBIDDEN", "422 FARE_LIMIT_EXCEEDED", "409 ROUTE_VERSION_CONFLICT", "409 INVALID_ROUTE_DISTANCE", "409 SETTLEMENT_FINALIZED"]
+      - id: API-38
+        method: POST
+        path: /parties/{id}/settlement/finalize
+        desc: 실제 요금·개인 부담·환급 확정
+        status: 완료
+        auth: 해당 팟 대표 (REPRESENTATIVE) · Idempotency-Key · If-Match 필수
+        success: "200 · data = Settlement"
+        req: |
+          application/json · FareInput
+          {
+            "actualTotalWon": 30000,
+            "routeVersion": 2
+          }
+        res: |
+          {
+            "data": {
+              "id": "901", "partyId": "401",
+              "estimatedTotalWon": 30000, "actualTotalWon": 30000,
+              "routeVersion": 2, "status": "REFUNDING",
+              "items": [
+                { "id": "10001", "memberId": "501", "actualShareWon": 5000, "refundDueWon": 1000, "status": "REFUND_PENDING" },
+                { "id": "10002", "memberId": "502", "actualShareWon": 8750, "refundDueWon": 1750, "status": "REFUND_PENDING" },
+                { "id": "10003", "memberId": "503", "actualShareWon": 16250, "refundDueWon": 0, "status": "COMPLETED", "transfers": [] }
+              ],
+              "receiptAvailable": true,
+              "finalizedAt": "2026-11-06T00:10:00+09:00",
+              "refundDueAt": "2026-11-13T00:10:00+09:00",
+              "allowedActions": []
+            }
+          }
+        errors: ["403 FORBIDDEN", "412 PRECONDITION_FAILED", "409 SETTLEMENT_NOT_READY", "422 FARE_LIMIT_EXCEEDED", "409 ROUTE_VERSION_CONFLICT", "409 INVALID_ROUTE_DISTANCE", "409 PREPAY_NOT_COMPLETED"]
+      - id: API-39
+        method: POST
+        path: /transfers/{id}/sent
+        desc: 송금자의 '보냈어요'
+        status: 완료
+        auth: 해당 이체의 송금자 (TRANSFER_PAYER) · Idempotency-Key 필수
+        success: "200 · data = Transfer"
+        req: 없음
+        errors: ["409 ACCOUNT_NOT_REGISTERED", "410 ACCOUNT_EXPIRED", "409 TRANSFER_CANCELLED"]
+      - id: API-40
+        method: POST
+        path: /transfers/{id}/received
+        desc: 수취자의 '받았어요'
+        status: 완료
+        auth: 해당 이체의 수취자 (TRANSFER_PAYEE) · Idempotency-Key 필수
+        success: "200 · data = Transfer"
+        req: 없음
+        errors: ["409 TRANSFER_CANCELLED"]
+
+  - name: 알림
+    owner: 박기범
+    items:
+      - id: API-41
+        method: GET
+        path: /me/notifications
+        desc: 내 알림 조회
+        status: 완료
+        auth: 로그인 사용자 (AUTHENTICATED)
+        success: "200 · data = Notification[]"
+        req: |
+          Query 파라미터
+          cursor (string, 선택), limit (integer, 선택, 1~100, 기본 20)
+        errors: []
+      - id: API-42
+        method: POST
+        path: /me/notifications/{id}/read
+        desc: 알림 읽음 처리
+        status: 완료
+        auth: 로그인 사용자 (AUTHENTICATED) · Idempotency-Key 필수
+        success: "200 · data = Notification"
+        req: 없음
+        errors: []
+
+  - name: 수요 지도
+    owner: 안시현
+    items:
+      - id: API-43
+        method: GET
+        path: /demand/candidates
+        desc: 수요 지도·노선 후보 목록
+        status: 시작 전
+        auth: 로그인 사용자 (AUTHENTICATED)
+        success: "200 · data = DemandCandidate[]"
+        req: |
+          Query 파라미터 (모두 선택)
+          runId, periodStart, periodEnd, weekday(0~6),
+          slotStart(HH:mm), candidateOnly(기본 false), cursor, limit
+        res: |
+          {
+            "data": [
+              {
+                "id": "1501", "runId": "1401", "universityId": "1",
+                "pickupPointId": "11", "pickupPointName": "학교 정문 거점",
+                "destinationDongId": "31", "destinationDongName": "예시동",
+                "weekday": 4, "slotStart": "23:30",
+                "journeyCount": 12, "failedJourneyCount": 4, "pooledJourneyCount": 6,
+                "estimatedWeeklyDemand": 40, "candidateRank": 2, "candidateThreshold": 30
+              }
+            ],
+            "meta": { "runId": "1401", "modelVersion": "proposal-v1", "hasMore": false }
+          }
+        errors: ["409 DEMAND_NOT_READY", "403 SCOPE_NOT_ALLOWED", "503 POLICY_NOT_CONFIGURED"]
+      - id: API-44
+        method: GET
+        path: /demand/candidates/{id}
+        desc: 노선 구간·근거 지표 상세
+        status: 시작 전
+        auth: 로그인 사용자 (AUTHENTICATED)
+        success: "200 · data = DemandCandidate"
+        req: 없음
+        errors: ["404 RESOURCE_NOT_FOUND"]
+      - id: API-45
+        method: GET
+        path: /me/demand-contribution
+        desc: 내 귀가 반영 횟수·후보 여부
+        status: 시작 전
+        auth: 학생 (STUDENT)
+        success: "200 · data = Contribution"
+        req: |
+          Query 파라미터 (모두 필수)
+          runId (string), pickupPointId (string), destinationDongId (string)
+        errors: ["409 DEMAND_NOT_READY"]
+
+  - name: 관계자 리포트
+    owner: 안시현
+    items:
+      - id: API-46
+        method: POST
+        path: /staff/reports
+        desc: 후보·조치로 리포트 초안 생성
+        status: 시작 전
+        auth: 학교 관계자 (STAFF) · Idempotency-Key 필수
+        success: "201 · data = StakeholderReport"
+        req: |
+          application/json · StakeholderReportCreate
+          {
+            "runId": "1401",
+            "format": "PDF",
+            "filters": { "periodStart": "2026-10-29", "periodEnd": "2026-11-04", "weekday": 4, "slotStart": "23:30" },
+            "items": [ { "estimateId": "1501", "action": "CITY_PROPOSAL" } ]
+          }
+        errors: ["422 MIXED_DEMAND_RUN", "422 SUPPRESSED_CANDIDATE", "422 REPORT_FILTER_MISMATCH", "422 REPORT_LAYOUT_LIMIT"]
+      - id: API-47
+        method: GET
+        path: /staff/reports
+        desc: 내 리포트 목록
+        status: 시작 전
+        auth: 학교 관계자 (STAFF)
+        success: "200 · data = StakeholderReport[]"
+        req: |
+          Query 파라미터
+          cursor (string, 선택), limit (integer, 선택, 1~100, 기본 20)
+        errors: []
+      - id: API-48
+        method: GET
+        path: /staff/reports/{id}
+        desc: 리포트 미리보기·생성 상태 조회
+        status: 시작 전
+        auth: 리포트를 만든 관계자 (REPORT_OWNER) · ETag
+        success: "200 · data = StakeholderReport"
+        req: 없음
+        errors: []
+      - id: API-49
+        method: POST
+        path: /staff/reports/{id}/exports
+        desc: 리포트 PDF·이미지 생성
+        status: 시작 전
+        auth: 리포트를 만든 관계자 (REPORT_OWNER) · Idempotency-Key · If-Match 필수
+        success: "202 · data = StakeholderReport"
+        req: 없음
+        errors: ["422 REPORT_LAYOUT_LIMIT", "409 REPORT_CONTENT_UNAVAILABLE"]
+      - id: API-50
+        method: GET
+        path: /staff/reports/{id}/download
+        desc: 완성된 리포트 다운로드 URL
+        status: 시작 전
+        auth: 리포트를 만든 관계자 (REPORT_OWNER)
+        success: "200 · data = Download (만료되는 비공개 URL)"
+        req: 없음
+        errors: ["409 REPORT_NOT_READY", "410 REPORT_FILE_EXPIRED"]

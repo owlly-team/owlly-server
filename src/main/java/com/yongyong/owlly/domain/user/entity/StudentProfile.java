@@ -51,4 +51,13 @@ public class StudentProfile extends BaseTimeEntity {
 
     @Column(name = "dropoff_lng_encrypted", nullable = false, columnDefinition = "text")
     private String dropoffLngEncrypted;
+
+    public void changeSameGenderDefault(boolean value) { this.sameGenderDefault = value; }
+
+    /** 행정동과 암호화 좌표를 함께 교체한다. 기존 귀가·동승 신청은 변경하지 않는다. */
+    public void changeDefaultDropoff(Long dongId, String encryptedLatitude, String encryptedLongitude) {
+        this.defaultDongId = dongId;
+        this.dropoffLatEncrypted = encryptedLatitude;
+        this.dropoffLngEncrypted = encryptedLongitude;
+    }
 }

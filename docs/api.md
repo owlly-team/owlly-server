@@ -30,7 +30,7 @@
 
 아울리 API 0.1 · OpenAPI JSON
 
-**예시 데이터 안내:** 모든 ID·사용자·은행·계좌·학교 이메일 도메인·요금·좌표·만료 시각은 가상입니다. 예시의 7일/세션 만료 시각을 미확정 기산점·TTL의 확정값으로 사용하지 않습니다. 실제 학교와 거점, 이메일 도메인은 별도 확인한 기준정보를 사용합니다.
+**예시 데이터 안내:** 요청·응답 예시의 ID·사용자·은행·계좌·학교 이메일 도메인·요금·좌표·만료 시각은 가상입니다. 실제 인증 대상 대학과 도메인은 API-01의 기준정보를 사용합니다. 예시의 7일/세션 만료 시각을 미확정 기산점·TTL의 확정값으로 사용하지 않습니다.
 
 ## 1. 공통 계약
 
@@ -47,20 +47,20 @@
 | 요일 | 0=일요일, 1=월요일, …, 6=토요일 |
 | 필수·NULL | DTO 표에 구분. NULL은 아직 결정되지 않았거나 제공 불가능한 값이며 0원/빈 문자열로 대체하지 않음 |
 | 요청 검증 | 정의에 없는 필드는 422. 역할·소유자·상태·계산 금액은 서버가 결정 |
-| 문자열 제한 | 이름 1~50자, 메시지 1~2,000자, 신고 설명 최대 1,000자 등은 이 초안의 구현 제안 |
+| 문자열 제한 | 가입 이름은 화면 정의서 v0.3 기준 앞뒤 공백 제거 후 2~20자. 메시지·신고 등 타 기능의 초안 제한은 해당 기능 구현 시 v0.3과 대조 |
 | 성공 | 단건 `{"data": {...}}`, 목록 `{"data": [...]}`. 204는 body 없음 |
 | 페이지 | 일반 목록은 cursor·limit(기본 20, 최대 100)과 meta.nextCursor/hasMore. 메시지는 afterId/beforeId 및 MessagePageMeta 사용 |
 | 오류 | `{"error":{"code","message","details","traceId"}}`. 민감정보·타인 자원 존재 여부를 details에 넣지 않음 |
 
 ### 인증·권한
 
-**구현 제안:** 동일 origin 웹 앱을 기준으로 `owlly_session` 쿠키를 사용합니다. Secure·HttpOnly·SameSite=Lax를 적용하며 세션 원문을 JSON이나 URL에 넣지 않습니다. 서버 세션의 기간·재인증·실패 잠금 기준은 아직 확정되지 않았습니다.
+**채택한 인증 방식:** 동일 origin 웹 앱을 기준으로 Spring Security + Spring Session JDBC 서버 세션과 `owlly_session` 쿠키를 사용합니다. 세션은 PostgreSQL의 인프라 테이블에 저장합니다. Secure·HttpOnly·SameSite=Lax를 적용하며 세션 원문을 JSON이나 URL에 넣지 않습니다. localhost HTTP 개발에서만 Secure를 해제합니다. 화면 정의서 v0.4의 로그인 유지 30일에 맞춰 서버 유휴 만료 기본값은 30일(`SESSION_TIMEOUT=30d`)이며 요청 시 연장됩니다. 지속 쿠키의 Max-Age도 같은 설정을 따르며 발급 시점부터 30일입니다. 브라우저 종료 후에도 쿠키를 사용할 수 있고, 서버 세션이 만료·폐기되면 쿠키가 남아 있어도 인증되지 않습니다. 절대 세션 만료·재인증 기준은 별도 정책입니다.
 
-- 로그인된 POST/PUT/PATCH/DELETE에는 `X-CSRF-Token`을 요구합니다. 토큰은 로그인 또는 GET /auth/session 응답에서 받습니다. 비로그인 인증 요청도 허용 Origin 검증·속도 제한을 적용합니다.
-- 인증 증표·서버 세션·멱등 요청 캐시는 인프라 저장소 설계 항목입니다. 이를 위해 현재 ERD에 새로운 업무 테이블이 확정됐다고 가정하지 않습니다.
-- 학생 가입은 이메일 인증 후 생성합니다. 학생 재로그인에 같은 이메일 OTP를 사용하는 안은 **제안**입니다. 관계자는 발급된 이메일/비밀번호로 로그인합니다.
+- 로그인된 POST/PUT/PATCH/DELETE에는 `X-CSRF-Token`을 요구합니다. 토큰은 로그인 또는 GET /auth/session 응답에서 받습니다. 공개 인증 POST는 `ALLOWED_ORIGINS`에 등록된 `Origin` 헤더가 필수이며 누락/불허는 403 FORBIDDEN입니다. 이메일 인증 제한과 관계자 로그인 연속 5회 실패 시 30분 잠금을 구현했습니다. 학생 로그인 API 자체의 추가 속도 제한 기준은 미정입니다.
+- 서버 세션은 Spring Session의 `SPRING_SESSION`/`SPRING_SESSION_ATTRIBUTES` 인프라 테이블로 관리하며 업무 ERD와 구분합니다. 인증 증표·멱등 요청 캐시는 각 기능의 인프라 저장소 설계 항목입니다.
+- 학생 가입은 이메일 인증 후 계정·프로필·인증 증표 소비를 하나의 트랜잭션에서 저장하고, 커밋 성공 후 서버 세션을 발급합니다. 기존 학생은 학교 이메일 OTP를 새로 인증해 받은 증표로 재로그인합니다. 미가입이면 404 ACCOUNT_NOT_FOUND이며 증표 소비는 롤백되어 회원가입에 이어 쓸 수 있습니다. 관계자는 운영팀이 발급한 STAFF 계정의 이메일/비밀번호로 API-09에서 로그인합니다.
 - 역할이 맞지 않으면 403, 타인의 개별 자원이거나 공개할 수 없는 ID이면 원칙적으로 404로 동일 처리합니다. 요청의 userId·senderId·createdBy·role을 신뢰하지 않습니다.
-- 계정 정지 중 새 동승은 금지합니다. 이미 발생한 선송금·환급 확인을 마칠 수 있는 제한 세션을 유지하는 안은 **기획 확인 사항**입니다.
+- 계정 상태와 역할을 매 요청 DB에서 확인합니다. 탈퇴/삭제 계정은 세션을 폐기하고 401을 반환합니다. 정지 계정은 현재 세션 조회·로그아웃만 허용하며 나머지는 403 ACCOUNT_SUSPENDED입니다. 이미 발생한 선송금·환급 확인을 위한 예외 접근 범위는 **기획 확인 사항**이며 정책 확정 후 확장합니다.
 
 | 권한 | 대상 |
 | --- | --- |
@@ -84,7 +84,7 @@
 - 귀가·신청·메시지의 clientJourneyKey/clientRequestKey/clientMessageId도 DB 고유키로 검증합니다. **한 번의 귀가 재등록에는 같은 journeyId를 유지하고 새 clientRequestKey를 사용합니다.**
 - `If-Match` 표시가 있는 명령은 직전 해당 자원 GET/수정 성공 응답의 ETag를 전달합니다. 누락은 428, 값이 오래됐으면 412입니다. ETag는 관련 레코드 상태를 함께 반영하는 강한 검증자로 계산하는 제안이며 ERD의 별도 필드로 추가하지 않았습니다.
 - 재시도는 서버에 이미 완료된 동일 멱등 요청을 먼저 확인한 뒤 ETag를 검사합니다. 새 요청은 잠금·조건부 갱신으로 보호합니다.
-- **정산 검토 예외:** finalize에서 음수 환급이 발견되면 REVIEW_REQUIRED 상태 기록 후 409를 반환합니다. finalizedAt·확정 분담액·환급 이체는 만들지 않습니다. 이후 GET settlement로 최신 상태/ETag를 다시 읽습니다. 이 예외 외의 검증 실패는 업무 변경을 커밋하지 않습니다.
+- **오류 시 기록 예외:** 이메일 인증은 잘못된 코드의 실패 횟수·멱등 요청 결과를 기록하고, 발급 정보를 커밋한 후 SMTP 발송이 실패한 경우에도 발급 건을 유지합니다. 관계자 로그인도 실패 횟수·잠금·멱등 기록을 먼저 커밋하고 401/403/429를 반환합니다. 그 밖의 검증 실패는 업무 변경을 커밋하지 않습니다.
 
 ### 응답 노출 범위
 
@@ -118,7 +118,7 @@
 - `settlements`: 예상 계산 → 선송금 → 실제 요금 대기 → 환급 → 완료. 검토가 필요한 경우 REVIEW_REQUIRED. 확정된 정산/경로는 수정하지 않습니다.
 - `stakeholder_reports`: DRAFT → GENERATING → READY 또는 FAILED. FAILED 재시도는 같은 리포트로 가능하며 READY 결과를 새 계산으로 덮어쓰지 않습니다.
 
-**서버 내부 작업:** 선착순 매칭·팟/하차 순서·예상 정산/개인 항목/PENDING 선송금 생성, 결과 알림, 출발 +5분 미입금 처리, 환급 알림·제재, 보존 만료 삭제, 수요 산출, 파일 생성은 스케줄러/작업 큐 영역입니다. 학생·관계자에게 임의 매칭 확정·추정치 편집·직접 수요 산출 권한을 주는 공개 API는 두지 않았습니다. 미정 정책이 필요한 작업은 설정 확정 전 활성화하지 않습니다.
+**서버 내부 작업:** 선착순 매칭·팟/하차 순서·예상 정산/개인 항목/PENDING 선송금 생성, 결과 알림, 확정 마감 처리(마감까지 확정하지 않은 멤버는 팟에서 빠지고 신청은 FAILED, 대표가 확정하지 않았거나 확정한 사람이 2명 미만이면 팟 해산, 아니면 확정한 사람끼리 경로를 다시 계산해 PREPAYING; 기획 답변 v2 #9), 출발 +5분 미입금 처리, 환급 알림·제재, 보존 만료 삭제, 수요 산출, 파일 생성은 스케줄러/작업 큐 영역입니다. 학생·관계자에게 임의 매칭 확정·추정치 편집·직접 수요 산출 권한을 주는 공개 API는 두지 않았습니다. 미정 정책이 필요한 작업은 설정 확정 전 활성화하지 않습니다.
 
 ## 3. API 목록
 
@@ -157,8 +157,6 @@
 | API-31 | PUT | `/rooms/{roomId}/accounts/{purpose}` | 내 선송금·환급 수취 계좌 등록 | 본인 계좌의 팟 참여자 |
 | API-32 | GET | `/transfers/{transferId}/recipient-account` | 송금할 수취 계좌 조회 | 해당 이체의 송금자 |
 | API-33 | GET | `/parties/{partyId}/settlement` | 예상·선송금·최종 정산 조회 | 해당 팟 참여자 |
-| API-34 | POST | `/parties/{partyId}/settlement/receipt` | 대표 결제 화면 첨부 | 해당 팟 대표 |
-| API-35 | GET | `/parties/{partyId}/settlement/receipt` | 참여자 결제 화면 열기 | 해당 팟 참여자 |
 | API-36 | PATCH | `/parties/{partyId}/settlement/route` | 정산 전 실제 하차 순서 수정 | 해당 팟 대표 |
 | API-37 | POST | `/parties/{partyId}/settlement/preview` | 실제 요금 분담·환급 미리보기 | 해당 팟 대표 |
 | API-38 | POST | `/parties/{partyId}/settlement/finalize` | 실제 요금·개인 부담·환급 확정 | 해당 팟 대표 |
@@ -187,7 +185,7 @@
 
 **요청 본문:** 없음
 
-**처리·검증:** 활성 대학과 허용 도메인만 반환. 실제 대학/도메인 seed는 팀 확인 후 등록.
+**처리·검증:** 대상은 강남대학교(`kangnam.ac.kr`), 경희대학교(`khu.ac.kr`), 단국대학교(`dankook.ac.kr`), 명지대학교(`mju.ac.kr`), 한국외국어대학교(`hufs.ac.kr`)다. 서버 시작 시 없는 대학·도메인만 활성 상태로 추가하고 기존 항목의 활성 상태나 소속은 변경하지 않는다. 조회에는 대상 중 활성 대학과 해당 대학의 활성 허용 도메인만 반환한다. 대학이 활성이고 도메인이 비활성이면 도메인 목록은 비어 있다. 이미 다른 대학에 연결된 동일 도메인은 자동 수정하지 않는다.
 
 **ERD 연결:** `universities`, `university_domains`
 
@@ -197,9 +195,9 @@
 
 **요청 본문:** 없음
 
-**처리·검증:** 성별 선택지와 기본 동성 옵션은 승인된 기획 설정에서 공급. 임의 코드로 가입하면 422.
+**처리·검증:** 화면 정의서 v0.3의 여성(`FEMALE`)·남성(`MALE`) 선택지와 `sameGenderDefault: true`를 반환합니다. 동성 매칭 끄기도 허용하며 프런트는 켜기·끄기 토글을 활성화합니다. 응답의 true는 초기 기본값이며 켜짐만 허용한다는 의미가 아닙니다. 가입 시 다른 성별 코드는 422 INVALID_GENDER_CODE입니다.
 
-**업무 오류:** `503 POLICY_NOT_CONFIGURED`
+**업무 오류:** 없음 (공통 오류 계약 적용)
 
 **ERD 연결:** 기준 설정 또는 인증 인프라
 
@@ -242,9 +240,9 @@
 }
 ```
 
-**처리·검증:** 6자리 코드 유효시간 10분. 재발급 시 이전 미사용 코드 무효화는 설계 제안. 발송 제한은 설정값이며 응답 resendAvailableAt/Retry-After 사용. 코드 원문·이메일 본문은 로그 제외.
+**처리·검증:** 6자리 코드 유효시간은 발급 시점부터 10분. 인증 정보를 먼저 DB에 커밋한 다음 SMTP 발송 결과를 기다린다. 재발급 시 이전 미사용 코드를 무효화한다. 같은 이메일의 발급 간격은 1분이며 한국 시간 자정부터 하루 10회까지 발급한다. SMTP 실패 또는 결과 불확실도 이미 생성된 발급 건으로 집계한다. 실패한 동일 멱등 요청은 자동 재발송하지 않고 503을 반환하며, 새 요청은 발급 제한을 따른다. 제한 시 Retry-After를 반환한다. 코드 원문·이메일 본문은 로그 제외.
 
-**업무 오류:** `422 EMAIL_DOMAIN_NOT_ALLOWED`, `429 RATE_LIMITED`, `503 EMAIL_DELIVERY_UNAVAILABLE`
+**업무 오류:** `422 EMAIL_DOMAIN_NOT_ALLOWED`, `409 IDEMPOTENCY_CONFLICT`, `410 VERIFICATION_EXPIRED`, `429 RATE_LIMITED`, `503 EMAIL_DELIVERY_UNAVAILABLE`, `503 POLICY_NOT_CONFIGURED`
 
 **ERD 연결:** `email_verifications`, `universities`, `university_domains`
 
@@ -262,9 +260,9 @@
 }
 ```
 
-**처리·검증:** 미소비·미폐기·미만료 코드만 원자적으로 소비. 이메일·대학을 바인딩한 1회용 증표를 발급. 인증 성공만으로 STAFF 권한을 얻을 수 없음.
+**처리·검증:** 미소비·미폐기·미만료 코드만 원자적으로 소비. 같은 이메일에서 인증번호를 5회 틀리면 10분 동안 인증 확인을 제한하며 재발급해도 제한은 유지한다. 잘못된 코드를 같은 키와 같은 요청으로 재시도하면 실패 횟수를 다시 늘리지 않고 기존 오류를 반환한다. 같은 키에 다른 인증 ID 또는 코드를 사용하면 409 IDEMPOTENCY_CONFLICT를 반환한다. 이메일·대학을 바인딩한 10분 유효의 1회용 증표를 발급. 인증 성공만으로 STAFF 권한을 얻을 수 없다. 이메일 중복 가입 검증은 학생 가입 API(API-07)에서 수행하며, 기존 계정은 역할·상태에 관계없이 중복 가입을 차단한다. 탈퇴 후 재가입 정책과 이메일 UNIQUE 변경은 별도 작업이다.
 
-**업무 오류:** `422 INVALID_VERIFICATION_CODE`, `410 VERIFICATION_EXPIRED`, `409 VERIFICATION_USED`, `429 RATE_LIMITED`
+**업무 오류:** `422 INVALID_VERIFICATION_CODE`, `404 RESOURCE_NOT_FOUND`, `409 IDEMPOTENCY_CONFLICT`, `410 VERIFICATION_EXPIRED`, `409 VERIFICATION_USED`, `429 RATE_LIMITED`, `503 POLICY_NOT_CONFIGURED`
 
 **ERD 연결:** `email_verifications`
 
@@ -281,7 +279,7 @@
   "verificationToken": "example-one-time-proof",
   "profile": {
     "realName": "김나연",
-    "genderCode": "APPROVED_CODE",
+    "genderCode": "FEMALE",
     "sameGenderDefault": true,
     "defaultDropoff": {
       "latitude": 37.33,
@@ -291,11 +289,17 @@
 }
 ```
 
-**처리·검증:** 검증 증표의 대학·이메일로 계정 생성, 프로필과 좌표 암호화를 같은 트랜잭션에서 저장. role/status/userId는 서버 결정. 프로필 성별 코드·하차 동은 승인 선택지/역지오코딩으로 검증.
+**처리·검증:** 검증 증표의 대학·이메일로 계정을 생성합니다. 대학·이메일은 요청에서 받지 않고 인증 증표에서 얻으며 활성 대학·도메인인지 다시 검사합니다. `role=STUDENT`, `status=ACTIVE`, `userId`는 서버가 결정합니다. 이름은 앞뒤 공백 제거 후 2~20자, 성별은 `FEMALE`/`MALE`, 동성 매칭은 `true`/`false` 모두 허용하고 선택한 값을 저장합니다(생략/null이면 true). 위도 -90~90, 경도 -180~180의 유한한 숫자가 필수입니다.
 
-**확인할 제안:** 세션 전달 방식은 서버 세션 쿠키 사용 제안
+**행정동 연결:** develop에 머지된 `AdministrativeAreaResolver`가 `DropoffLocationService.resolveDong(latitude, longitude)`를 구현하여 가입에 주입됩니다. 카카오의 행정동(H) 공식 코드로 DB를 조회하고, 없는 시·구·동은 공통 서비스가 등록하여 DONG 엔티티를 반환합니다. 지역 판별 실패는 422 LOCATION_UNRESOLVABLE, 키 누락·카카오 장애는 503 UPSTREAM_UNAVAILABLE로 전달합니다. 가입 트랜잭션 실패 시 증표 소비·계정·프로필·새 지역 저장도 함께 롤백됩니다.
 
-**업무 오류:** `410 VERIFICATION_EXPIRED`, `409 VERIFICATION_USED`, `409 ACCOUNT_ALREADY_EXISTS`, `422 INVALID_GENDER_CODE`, `422 LOCATION_UNRESOLVABLE`
+인증 증표 소비·계정·암호화한 실명/하차 좌표·프로필·가입 멱등 기록은 한 트랜잭션입니다. 위치 판별이나 저장 실패 시 증표 소비도 롤백되어 다시 시도할 수 있습니다. 기존 계정은 역할·상태에 관계없이 이메일 중복 가입을 막습니다. 탈퇴 후 재가입 정책과 이메일 UNIQUE 변경은 별도 작업입니다.
+
+`Idempotency-Key`는 UUID가 필수입니다. 같은 키·같은 정규화 요청은 기존 계정으로 201을 반환하고 세션을 새로 발급하며, 같은 키·다른 요청은 409 IDEMPOTENCY_CONFLICT입니다. 원래 인증 증표 만료까지 재시도가 가능하고, 만료 뒤에는 세션을 재발급하지 않습니다. 계정 정지·탈퇴 시 재시도 세션 발급도 막습니다. 토큰·실명·좌표 원문 대신 비밀키 기반 요청 해시와 계정 ID·만료만 인프라 테이블 `student_registration_receipts`에 보관하고, 만료 기록은 주기적으로 삭제합니다. 이미 만료 기록이 정리된 뒤의 증표 재사용은 VERIFICATION_USED 또는 VERIFICATION_EXPIRED입니다.
+
+**인증 연결:** DB 커밋 성공 후 서버 세션 쿠키를 발급하고 201 `data: Session`을 반환합니다. `data.user.universityId`를 유지하면서 `data.user.universityName`을 추가했습니다. 로그인/재시도 시 세션 ID와 CSRF 토큰은 새로 생성하며 응답은 `Cache-Control: no-store`입니다. 가입 응답은 세션 DTO이므로 하차 동 이름은 포함하지 않습니다. 가입 후 프로필 조회 API-12에서 `defaultDongId`와 `defaultDongName`을 함께 받습니다.
+
+**업무 오류:** `410 VERIFICATION_EXPIRED`, `409 VERIFICATION_USED`, `409 ACCOUNT_ALREADY_EXISTS`, `409 IDEMPOTENCY_CONFLICT`, `422 EMAIL_DOMAIN_NOT_ALLOWED`, `422 INVALID_GENDER_CODE`, `422 LOCATION_UNRESOLVABLE`, `422 VALIDATION_ERROR`, `403 FORBIDDEN`, `403 ACCOUNT_SUSPENDED`, `403 ACCOUNT_UNAVAILABLE`, `503 POLICY_NOT_CONFIGURED`, `503 UPSTREAM_UNAVAILABLE`
 
 **ERD 연결:** `users`, `student_profiles`, `email_verifications`, `administrative_areas`
 
@@ -313,11 +317,15 @@
 }
 ```
 
-**처리·검증:** 기존 학생의 학교 이메일 재인증 증표를 소비하여 세션 발급. 학생 비밀번호를 새로 가정하지 않음. 학생 로그인 방식 승인 전에는 구현 보류 항목. 이용 정지 중에도 정산 복구용 제한 세션을 허용하는 안이며 새 동승은 차단. 이 예외 접근 범위는 기획 확인 필요.
+**처리·검증:** 기존 이메일 발급·검증 API로 학교 이메일을 재인증하고 받은 `verificationToken`을 전달합니다. 증표의 이메일에 해당하는 기존 계정과 대학 일치를 확인하고, STUDENT/ACTIVE 및 학생 프로필 존재를 검증합니다. 계정·프로필을 생성하거나 수정하지 않습니다. STAFF·탈퇴·프로필 누락·대학 불일치는 403 ACCOUNT_UNAVAILABLE, 정지는 403 ACCOUNT_SUSPENDED입니다. 정지 계정용 제한 로그인은 이번 구현에 포함하지 않고 기존 공통 세션 발급 정책을 유지합니다.
 
-**확인할 제안:** 기획 미확정: 이메일 OTP 재로그인 제안; 정지 계정의 기존 정산 접근 유지 제안
+**트랜잭션·재시도:** 증표 소비와 `student_login_receipts`의 로그인 멱등 기록은 같은 트랜잭션입니다. 실패하면 증표 소비도 롤백합니다. UUID Idempotency-Key를 정규화하고 같은 키·같은 증표는 기존 계정으로 세션을 재발급하며, 같은 키·다른 증표는 409 IDEMPOTENCY_CONFLICT입니다. 최초 증표 만료까지만 재시도하고 매번 계정 역할·상태·대학·프로필을 다시 확인합니다. 다른 키나 가입 API에서 이미 소비된 증표를 재사용하면 409 VERIFICATION_USED입니다. 만료 기록은 주기적으로 정리하며, 정리 전 만료 재시도는 410, 정리 후 소비된 증표 재사용은 409입니다. 원문 대신 요청 HMAC·사용자/대학 ID·만료만 저장합니다.
 
-**업무 오류:** `404 ACCOUNT_NOT_FOUND`, `410 VERIFICATION_EXPIRED`, `409 VERIFICATION_USED`, `503 POLICY_NOT_CONFIGURED`, `403 ACCOUNT_UNAVAILABLE`
+**인증 연결:** 커밋 성공 후 SessionService로 세션·CSRF 토큰을 발급하고 HTTP 200 `data: Session`(대학 ID·대학명 포함), `Cache-Control: no-store`를 반환합니다. 공개 POST의 허용 Origin이 필수입니다. 비로그인에는 CSRF 토큰이 필요 없으며, 기존 인증 세션 쿠키를 함께 보내면 X-CSRF-Token도 필요합니다. 성공 시 세션 ID와 CSRF 토큰을 교체합니다. 세션·쿠키 유지 기간은 공통 설정 30일입니다. 기존 이메일 발송·인증 실패 제한은 그대로 적용하고, 로그인 API 자체의 추가 속도 제한 수치는 이번에 새로 정하지 않습니다.
+
+**프런트 연결:** 유효한 세션이면 GET /auth/session 확인 후 홈으로 이동합니다. 세션이 없으면 이메일 인증 → 이 API 호출 → 성공 시 홈, 404 ACCOUNT_NOT_FOUND 시 유효 증표를 유지하고 프로필 가입으로 진행합니다. 이 기존/신규 학생 분기는 API 구현 기준이며 화면 정의서의 '이미 가입한 메일' 안내 및 인증 후 이동 문구와 프런트 연동 시 맞춰야 합니다.
+
+**업무 오류:** `404 ACCOUNT_NOT_FOUND`, `410 VERIFICATION_EXPIRED`, `409 VERIFICATION_USED`, `409 IDEMPOTENCY_CONFLICT`, `422 VALIDATION_ERROR`, `403 FORBIDDEN`, `403 ACCOUNT_SUSPENDED`, `403 ACCOUNT_UNAVAILABLE`, `503 POLICY_NOT_CONFIGURED` 및 공통 오류
 
 **ERD 연결:** `users`, `email_verifications`
 
@@ -336,11 +344,19 @@
 }
 ```
 
-**처리·검증:** 발급된 STAFF 계정과 password_hash 검증. 계정 존재 여부와 비밀번호 오류는 동일 INVALID_CREDENTIALS로 응답. 실패 잠금/만료기간은 설정값. 이용 정지 중에도 정산 복구용 제한 세션을 허용하는 안이며 새 동승은 차단. 이 예외 접근 범위는 기획 확인 필요.
+**처리·검증:** 운영팀이 발급한 기존 STAFF 계정의 BCrypt password_hash를 검증합니다. 이메일은 앞뒤 공백 제거·소문자로 정규화하고 비밀번호는 공백을 포함해 그대로 검증합니다. 두 필드는 JSON 문자열만 허용합니다. 이메일은 최대 255자, 비밀번호는 비어 있지 않은 UTF-8 72바이트 이하입니다. 계정 없음·STUDENT 계정·비밀번호 오류·비밀번호 해시 누락/형식 오류는 모두 401 INVALID_CREDENTIALS("메일이나 비밀번호가 맞지 않아요.")입니다. 계정 부재 시에도 더미 BCrypt 검증을 수행합니다. 학생 이메일 OTP·도메인 제한·학생 프로필은 요구하지 않습니다.
 
-**확인할 제안:** 정지 계정의 기존 정산 접근 유지 제안
+**상태·권한:** 올바른 비밀번호를 확인한 뒤 탈퇴·참조 대학 없음은 403 ACCOUNT_UNAVAILABLE, 정지는 403 ACCOUNT_SUSPENDED로 차단합니다. 제한 세션 발급 제안은 적용하지 않고 기존 공통 세션 발급 정책을 유지합니다. STAFF는 수요/관계자 경로만 역할에 맞게 접근하고, 학생 개인정보·귀가·동승·채팅·송금 경로는 공통 인증 설정에서 403으로 차단합니다.
 
-**업무 오류:** `401 INVALID_CREDENTIALS`, `429 RATE_LIMITED`, `403 ACCOUNT_UNAVAILABLE`
+**실패 잠금:** 정규화 이메일의 HMAC을 기준으로 연속 실패를 DB에 저장합니다. 기본 5번째 새 실패부터 30분 잠금(429 RATE_LIMITED + 남은 초의 Retry-After)이며 잠금 중 올바른 비밀번호도 차단합니다. 잠금 요청이 기존 잠금 만료를 연장하지 않습니다. 성공하면 실패 횟수를 초기화하고, 30분이 지나면 자동 해제합니다. 존재하지 않는 이메일에도 동일한 실패·잠금 계약을 적용합니다. 업무 계정의 SUSPENDED와 별개인 인증용 잠금입니다.
+
+**재시도·트랜잭션:** UUID Idempotency-Key가 필수입니다. 같은 키·같은 정규화 요청의 인증 실패 재전송은 실패 횟수를 중복 집계하지 않고, 같은 키·다른 요청은 409 IDEMPOTENCY_CONFLICT입니다. 성공 재시도는 현재 비밀번호·역할·상태·잠금·계정/대학 바인딩을 다시 검사합니다. 잠금은 이전 성공 결과보다 우선하며, 비밀번호 변경 후 이전 성공 기록만으로 세션을 발급하지 않습니다. 실패·멱등 기록 커밋 후 오류를 반환하고 예상 못 한 저장 실패는 롤백합니다. 성공 커밋 뒤 SessionService로 세션·CSRF 토큰을 발급하며 기존 세션 ID도 교체합니다.
+
+**기록 설정:** 피그마가 정한 값은 5회·30분 잠금입니다. 구현 상세로 재시도 기록 기본 유효기간도 최초 요청부터 30분(설정 가능)이며 성공 재시도로 연장하지 않습니다. 만료·정리 후 같은 키가 다시 오면 현재 자격을 검증하는 새 요청으로 처리합니다. 비밀번호·이메일 원문·비밀번호 해시·세션/CSRF 토큰은 재시도 저장소에 저장하지 않습니다. `staff_login_attempts`는 계정 HMAC·실패 횟수·잠금·최근 접근, `staff_login_receipts`는 키·요청 HMAC·성공 계정/대학 ID 또는 오류·만료만 저장합니다. 만료 멱등 기록과 30일 미사용·잠금 해제된 실패 기록을 주기적으로 정리합니다.
+
+**응답·프런트:** 200 + 기존 Session(대학명 포함), Cache-Control: no-store, 30일 세션 쿠키를 사용합니다. 허용 Origin이 필수이고 비로그인에는 CSRF 토큰이 필요 없으며, 기존 인증 쿠키를 함께 보내면 X-CSRF-Token도 필요합니다. 성공하면 A-01 수요 지도로 이동합니다. 401은 동일 문구로 안내하고 비밀번호 입력을 지우며 새 시도에는 새 UUID를 사용합니다. 429는 Retry-After 동안 재시도를 제한합니다. API 경로·요청 필드·성공 응답 구조는 원본 명세를 유지합니다.
+
+**업무 오류:** `401 INVALID_CREDENTIALS`, `429 RATE_LIMITED`, `403 ACCOUNT_SUSPENDED`, `403 ACCOUNT_UNAVAILABLE`, `409 IDEMPOTENCY_CONFLICT`, `422 VALIDATION_ERROR`, `403 FORBIDDEN`, `503 POLICY_NOT_CONFIGURED` 및 공통 오류
 
 **ERD 연결:** `users`
 
@@ -351,6 +367,8 @@
 **요청 본문:** 없음
 
 **처리·검증:** 현재 사용자와 세션 만료·CSRF 증표만 반환. 세션 원문은 응답 body에 노출하지 않음.
+
+`Cache-Control: no-store`를 적용합니다. `expiresAt`은 유휴 만료 시각으로 요청 시 갱신됩니다. 세션 없음/만료는 401 UNAUTHENTICATED입니다.
 
 **ERD 연결:** `users`
 
@@ -363,6 +381,8 @@
 **요청 본문:** 없음
 
 **처리·검증:** 현재 세션 폐기와 쿠키 만료. 회원 탈퇴·프로필 삭제가 아님.
+
+**재시도 예외:** 이미 세션이 없거나 만료된 경우에도 유효한 UUID `Idempotency-Key`가 있으면 204입니다. 활성 로그인 세션은 CSRF 검증 후 폐기합니다. 동일 명령 자체가 멱등이므로 별도 로그아웃 결과 캐시를 만들지 않습니다. 응답은 `Cache-Control: no-store`입니다.
 
 **ERD 연결:** 기준 설정 또는 인증 인프라
 
@@ -377,6 +397,10 @@
 **요청 본문:** 없음
 
 **처리·검증:** 본인 실명·기본 하차 핀만 복호화하여 반환. 타인 userId를 입력받지 않음.
+
+`data.user`에는 기존 공통 User의 `universityName`을 포함하고, 기본 하차 행정동은 `defaultDongId`와 `defaultDongName`을 함께 반환합니다. 성별 코드는 가입 시 확정한 FEMALE/MALE입니다. 본인 실명·정확한 기본 좌표를 반환하므로 `Cache-Control: no-store`를 적용합니다. 응답의 `ETag`를 다음 프로필 수정의 `If-Match`에 전달합니다.
+
+**업무 오류:** `401 UNAUTHENTICATED`, `403 FORBIDDEN`, `403 ACCOUNT_SUSPENDED`, `403 ACCOUNT_UNAVAILABLE`, `404 RESOURCE_NOT_FOUND` 및 공통 오류
 
 **ERD 연결:** `users`, `student_profiles`
 
@@ -398,9 +422,19 @@
 }
 ```
 
-**처리·검증:** 실명/기본 동성 옵션/기본 하차 핀만 수정. 기존 신청 좌표와 성별 스냅샷은 불변. 성별 수정은 정책 미확정으로 이 API에서 받지 않음.
+**처리·검증:** 화면 정의서 v0.4 S-08과 사용자 확인에 따라 동성 매칭 기본값과 기본 하차 지점만 수정합니다. 이름·학교·이메일·성별은 조회 전용이며 요청에 포함하면 422입니다. 재인증을 통한 이름·학교 변경 화면은 정의되지 않아 이번 API에 포함하지 않습니다. 위치·알림 권한 상태는 기기/브라우저가 관리하며 프로필 DB에 저장하지 않습니다.
 
-**업무 오류:** `422 LOCATION_UNRESOLVABLE`
+**부분 수정:** `sameGenderDefault`는 JSON boolean true/false 모두 허용합니다. `defaultDropoff`는 숫자형 latitude(-90~90)·longitude(-180~180)를 함께 보냅니다. 최소 한 필드가 필요하며 생략한 필드는 유지합니다. 명시적인 null, 빈 객체, 숫자·boolean의 문자열 대체, 미정의 필드는 422입니다.
+
+**위치 저장:** 공통 DropoffLocationService로 좌표를 행정동에 연결하고, 동 ID·암호화한 좌표·토글 변경·멱등 기록을 같은 트랜잭션에서 커밋합니다. 판별·암호화·저장 실패 시 모두 롤백합니다. 카카오 키 누락·장애는 503 UPSTREAM_UNAVAILABLE, 판별 불가는 422 LOCATION_UNRESOLVABLE입니다. 프로필 변경은 기존 귀가·동승 신청의 행정동·좌표·동성 옵션·성별 스냅샷에 소급하지 않습니다. S-08에서 지도에 진입한 경우에만 이 API로 기본값을 저장하며, S-02 동승 등록에서 고른 위치는 해당 신청에 사용합니다.
+
+**동시 수정·재시도:** 로그인 쿠키와 X-CSRF-Token, UUID Idempotency-Key, If-Match가 필수입니다. 새 명령의 If-Match 누락은 428, 현재 프로필 응답과 불일치는 412입니다. 같은 키·같은 사용자·같은 요청의 완료 기록은 ETag 비교 전에 확인해 재적용 없이 현재 프로필·ETag를 반환합니다. 이후 다른 수정이 있었다면 그 현재 값을 반환하며 과거 값으로 되돌리지 않습니다. 같은 키의 다른 사용자/본문은 409입니다. 실패한 수정에는 완료 기록을 남기지 않아 같은 키·본문으로 재시도할 수 있습니다. 계정 상태·역할 검증은 재시도에도 적용합니다.
+
+**멱등 기록:** `student_profile_update_receipts`에 키·사용자 ID·요청 HMAC·만료만 보관하며 실명·좌표·응답·세션 원문은 저장하지 않습니다. 기존 VERIFICATION_SECRET(32바이트 이상)을 재사용합니다. 기록의 구현 기본 유효기간은 성공 커밋 기준 24시간(PROFILE_UPDATE_RECEIPT_TTL_SECONDS=86400, 생략 가능)이며 재시도로 연장하지 않습니다. 만료·삭제된 키는 현재 ETag가 필요한 새 요청으로 처리합니다. 행 잠금과 FOR UPDATE SKIP LOCKED로 수정 중 기록이 정리에 삭제되지 않게 합니다. 이 보관 기간은 구현 설정이며 피그마의 별도 정책은 아닙니다.
+
+**응답:** 200 + 현재 StudentProfile, 새 ETag, Cache-Control: no-store. Swagger의 PATCH에는 X-CSRF-Token 입력란도 제공합니다.
+
+**업무 오류:** `401 UNAUTHENTICATED`, `403 FORBIDDEN`, `403 ACCOUNT_SUSPENDED`, `403 ACCOUNT_UNAVAILABLE`, `404 RESOURCE_NOT_FOUND`, `409 IDEMPOTENCY_CONFLICT`, `412 PRECONDITION_FAILED`, `428 PRECONDITION_REQUIRED`, `422 VALIDATION_ERROR`, `422 LOCATION_UNRESOLVABLE`, `503 UPSTREAM_UNAVAILABLE`, `503 POLICY_NOT_CONFIGURED` 및 공통 오류
 
 **ERD 연결:** `student_profiles`, `administrative_areas`
 
@@ -425,9 +459,9 @@
 }
 ```
 
-**처리·검증:** 현재 GPS는 일시 계산만 하고 DB·접근 로그·분석 이벤트·오류 로그·캐시 키에 남기지 않음. 선택한 하차 핀도 이 API에서는 저장하지 않음. 외부자료 부족 시 해당 값 NULL 및 warnings. 모든 값은 추정.
+**처리·검증:** 현재 GPS는 일시 계산만 하고 DB·접근 로그·분석 이벤트·오류 로그·캐시 키에 남기지 않음. 선택한 하차 핀도 이 API에서는 저장하지 않음. 외부자료 부족 시 해당 값 NULL 및 warnings. 모든 값은 추정. **막차**: 경기도 GBIS는 노선별 막차 시각만 주고 출발지→도착지 길찾기가 없어서, 안내할 구간(거점 + 도착 구 → 노선·승하차 정류장)을 미리 정해 둔다. 지금은 시연 구간 하나(단국대 정문 거점 → 수원시 영통구, 720-3번 순환, 종점 출발 막차 + 정류장까지 임시 5분, 버스 임시 40분, 1,550원)이고 정류장별 소요 시간은 임시 값. 정류장 출발 시각에서 도보 시간(직선 거리 × 1.3 ÷ 분당 70m, 현재 위치가 없으면 거점 기준)과 여유 5분을 뺀 시각이 `lastLeaveAt`(화면정의서 홈·막차 전: 출발해야 할 시각 = 막차 출발 − 도보 시간 − 5분). 목록에 없는 구간, 막차가 끊긴 뒤, GBIS 장애·막차 정보 없음이면 `transit.available=false`(오류 아님)이고 안내 가능한 사유는 `warnings`. 막차 시각은 서버 메모리에 6시간 캐시. 요일은 평일·토·일만 가르고 공휴일은 아직 평일로 본다. **혼자 택시**: 지금 출발 기준(화면정의서 "지금 출발")으로 요금·거리·소요 시간·도착 시각; 소요 시간을 모르면 도착 시각만 null. 심야할증(출발 시각 23:00~04:00, 30%)과 시계 외 할증(거점과 하차 지점의 시·군이 다르면 20%; 경계 위치는 보지 않고 전체 요금에 적용하는 어림)을 반영하고, 둘이 같이 걸리면 할증률을 더해서(50%) 곱한다. 시계 외이면 `warnings`에 알린다. 통행료에는 할증을 곱하지 않는다. 팟의 전체 예상 요금(매칭 때와 이탈·확정 마감 후 재계산)에도 같은 시계 외 규칙을 쓴다: 하차 지점 중 하나라도 거점과 다른 시·군이면 전체 요금에 적용해서, 홈의 동승 추정과 매칭 후 예상 분담액이 어긋나지 않게 한다. **동승**: 지금 등록할 수 있는 가장 가까운 시간대(`nearestPoolSlot`)의 대기 인원이 1명 이상이면 "혼자 택시 요금 ÷ (대기 인원 + 나, 최대 4명)"을 100원 단위로 올린 값을 `poolEstimatedShareWon`(추정; 대기 0명이면 null).
 
-**업무 오류:** `422 LOCATION_UNRESOLVABLE`, `503 UPSTREAM_UNAVAILABLE`
+**업무 오류:** `404 RESOURCE_NOT_FOUND`, `403 FORBIDDEN`, `422 LOCATION_UNRESOLVABLE`, `503 UPSTREAM_UNAVAILABLE`(하차 핀을 행정동으로 바꾸는 카카오 장애; 막차·택시 외부 자료 부족은 오류가 아니라 warnings)
 
 **ERD 연결:** `pickup_points`, `student_profiles`, `ride_requests`
 
@@ -451,9 +485,9 @@
 }
 ```
 
-**처리·검증:** 학교는 로그인 사용자 기준 스냅샷. 핀에서 동을 판별해 동만 journeys에 저장하고 원 좌표는 이 API에서 지속 저장하지 않음. 결과는 UNRESOLVED. 등록 재시도는 같은 clientJourneyKey를 사용.
+**처리·검증:** 학교는 로그인 사용자 기준 스냅샷. 핀에서 동을 판별해 동만 journeys에 저장하고 원 좌표는 이 API에서 지속 저장하지 않음. 결과는 UNRESOLVED. 등록 재시도는 같은 clientJourneyKey를 사용. 거점이 없거나 비활성이거나 다른 학교 전용이면 404 `RESOURCE_NOT_FOUND`(공용 거점은 모든 학교 학생이 사용). 같은 학생·같은 clientJourneyKey·같은 요청(거점·하차 동·귀가 예정 시각)을 다시 보내면 먼저 만든 귀가를 201로 반환하고, 같은 키의 다른 요청은 409 `IDEMPOTENCY_CONFLICT`. `ACTIVE_JOURNEY_CONFLICT`는 다른 귀가에 진행 중인 동승이 있을 때: 대기(WAITING) 신청이 있거나, 매칭(MATCHED)됐고 그 팟이 아직 끝나지 않은(COMPLETED·CANCELLED가 아닌) 경우. 신청이 없는 UNRESOLVED 귀가는 막지 않는다.
 
-**업무 오류:** `409 ACTIVE_JOURNEY_CONFLICT`, `422 LOCATION_UNRESOLVABLE`, `409 IDEMPOTENCY_CONFLICT`
+**업무 오류:** `404 RESOURCE_NOT_FOUND`, `409 ACTIVE_JOURNEY_CONFLICT`, `422 LOCATION_UNRESOLVABLE`, `503 UPSTREAM_UNAVAILABLE`, `409 IDEMPOTENCY_CONFLICT`
 
 **ERD 연결:** `journeys`, `users`, `administrative_areas`
 
@@ -486,9 +520,9 @@
 }
 ```
 
-**처리·검증:** 기존 대기 신청이 있으면 같은 트랜잭션에서 CANCELLED 처리 후 선택 기록. 이미 매칭된 팟은 먼저 허용된 팟 이탈 절차가 필요. POOL_BOARDED는 이 API로 입력 불가. 동일 선택 재전송은 현재 결과 반환; 다른 최종 선택으로 덮어쓰기 금지. 취소로 journey가 CANCELLED인 경우 선택 기록 불가.
+**처리·검증:** 기존 대기 신청이 있으면 같은 트랜잭션에서 CANCELLED 처리 후 선택 기록. 이미 매칭된 팟은 먼저 허용된 팟 이탈 절차가 필요. POOL_BOARDED는 이 API로 입력 불가. 동일 선택 재전송은 현재 결과 반환; 다른 최종 선택으로 덮어쓰기 금지. 취소로 journey가 CANCELLED인 경우 선택 기록 불가. 본인 귀가가 아니거나 없는 귀가는 둘 다 404 `RESOURCE_NOT_FOUND`. 이미 동승 탑승(POOL_BOARDED)·다른 선택이 기록됐거나 CANCELLED인 귀가는 `JOURNEY_ALREADY_RESOLVED`. 선택이 기록되면 활성 신청이 없어 응답의 `activeRequestId`는 null.
 
-**업무 오류:** `409 PARTY_LEAVE_REQUIRED`, `409 JOURNEY_ALREADY_RESOLVED`
+**업무 오류:** `404 RESOURCE_NOT_FOUND`, `409 PARTY_LEAVE_REQUIRED`, `409 JOURNEY_ALREADY_RESOLVED`
 
 **ERD 연결:** `journeys`, `ride_requests`
 
@@ -507,9 +541,9 @@
 
 **요청 본문:** 없음
 
-**처리·검증:** 로그인 학교·성별·차단 관계로 본인과 호환되는 WAITING 신청만 계산하고 본인 신청 제외. ‘구간 등록 5건 미만 숨김’은 수요 지도 규칙이며 슬롯 대기 수와 구분.
+**처리·검증:** 로그인 학교·성별·차단 관계로 본인과 호환되는 WAITING 신청만 계산하고 본인 신청 제외. ‘구간 등록 5건 미만 숨김’은 수요 지도 규칙이며 슬롯 대기 수와 구분. `date`(한국 날짜)에 있는 출발 시간대를 모두 돌려준다: 22:00~02:00, 30분 단위(화면정의서 공통 정책), 자정을 넘기는 시간대는 실제 날짜로 센다(예: 11.6이면 00:00~02:00과 22:00~23:30). `waitingCount`는 같은 학교·거점·도착 구의 WAITING 신청 중 성별 조건이 서로 맞고(한쪽이라도 동성만 원하면 성별이 같아야 함) 나와 차단한 사이가 아닌 신청만 센다. 출발 15분 전이 지난 시간대도 목록에 있고 `registrationAllowed=false`, `reason=REGISTRATION_CLOSED`(숨길지는 화면이 정함). 등록할 수 있으면 `reason`은 null. 거점·도착 동이 없거나 내 학교가 쓸 수 없으면 404, 학생이 아니면 403.
 
-**업무 오류:** `503 POLICY_NOT_CONFIGURED`
+**업무 오류:** `404 RESOURCE_NOT_FOUND`, `403 FORBIDDEN`, `503 POLICY_NOT_CONFIGURED`(서비스 시간은 기본값 22:00~02:00으로 설정돼 있어 현재 발생하지 않음)
 
 **ERD 연결:** `ride_requests`, `users`, `student_profiles`, `user_blocks`
 
@@ -534,9 +568,9 @@
 }
 ```
 
-**처리·검증:** 귀가는 UNRESOLVED여야 함. 본인 활성 신청은 전체 귀가에 걸쳐 최대 1개. 서버 허용 슬롯, 소속, 권역, 동성 조건을 검증하고 핀·성별을 신청에 스냅샷 저장. 재등록은 같은 journeyId에 새 request 행 생성; journey 집계 거점·동·시각을 이번 선택으로 갱신. 금액·대기순서는 서버 계산.
+**처리·검증:** 귀가는 UNRESOLVED여야 함. 본인 활성 신청은 전체 귀가에 걸쳐 최대 1개. 서버 허용 슬롯, 소속, 권역, 동성 조건을 검증하고 핀·성별을 신청에 스냅샷 저장. 재등록은 같은 journeyId에 새 request 행 생성; journey 집계 거점·동·시각을 이번 선택으로 갱신. 금액·대기순서는 서버 계산. 출발 시각은 22:00~02:00의 30분 단위 정각이어야 하고 출발 15분 전까지만 등록할 수 있다(아니면 422 `INVALID_DEPARTURE_SLOT`). 하차 핀은 행정동·구로 판별해 신청에 적고(판별하지 못하면 422 `LOCATION_UNRESOLVABLE`) 좌표는 암호화해 저장한다. 성별은 가입한 프로필 값을 스냅샷으로 남긴다. 결과 안내 시각(`resultDueAt`)은 막차 정보 연동 전까지 출발 20분 전(막차 후 등록 기준)으로 둔다. 같은 clientRequestKey·같은 귀가·같은 내용의 재시도는 먼저 만든 신청을 201로 반환하고, 같은 키의 다른 내용은 409 `IDEMPOTENCY_CONFLICT`. `ACTIVE_REQUEST_EXISTS`는 이 학생에게 진행 중인 동승(대기 신청, 또는 매칭됐고 팟이 아직 끝나지 않은 경우)이 있을 때. 귀가나 거점을 쓸 수 없으면 404, 학생이 아니면 403. `UNSETTLED_RIDE_RESTRICTION`은 정산이 앱 밖에서 이뤄지고 자동 제재를 MVP에서 제외했으므로(기획 답변 1·5) 적용하지 않는다.
 
-**업무 오류:** `409 ACTIVE_REQUEST_EXISTS`, `409 JOURNEY_ALREADY_RESOLVED`, `422 INVALID_DEPARTURE_SLOT`, `409 UNSETTLED_RIDE_RESTRICTION`, `503 POLICY_NOT_CONFIGURED`
+**업무 오류:** `404 RESOURCE_NOT_FOUND`, `403 FORBIDDEN`, `409 ACTIVE_REQUEST_EXISTS`, `409 JOURNEY_ALREADY_RESOLVED`, `409 IDEMPOTENCY_CONFLICT`, `422 INVALID_DEPARTURE_SLOT`, `422 LOCATION_UNRESOLVABLE`, `409 UNSETTLED_RIDE_RESTRICTION`(MVP 미적용), `503 POLICY_NOT_CONFIGURED`
 
 **ERD 연결:** `journeys`, `ride_requests`, `student_profiles`, `pickup_points`, `administrative_areas`
 
@@ -560,9 +594,9 @@
 
 **요청 본문:** 없음
 
-**처리·검증:** WAITING→CANCELLED. 이미 CANCELLED면 동일 응답. MATCHED 이후 취소는 party leave로 처리. 매칭 작업과 같은 신청 잠금을 사용하여 이중 배정을 막음.
+**처리·검증:** WAITING→CANCELLED. 출발 15분 전까지만 취소할 수 있고 지났으면 409 `CANCELLATION_DEADLINE_PASSED`(화면정의서 v0.3.1 S-03 "출발 15분 전까지는 언제든 취소할 수 있어요", 방 나가기 마감과 같은 시각). 이미 CANCELLED면 마감이 지난 뒤에도 동일 응답. MATCHED 이후 취소는 party leave로 처리. 매칭 작업과 같은 신청 잠금을 사용하여 이중 배정을 막음.
 
-**업무 오류:** `409 REQUEST_ALREADY_MATCHED`, `409 INVALID_STATE`
+**업무 오류:** `409 REQUEST_ALREADY_MATCHED`, `409 INVALID_STATE`, `409 CANCELLATION_DEADLINE_PASSED`
 
 **ERD 연결:** `ride_requests`
 
@@ -586,7 +620,7 @@
 
 **요청 본문:** 없음
 
-**처리·검증:** 본인 decision PENDING→ACCEPTED. 확정 마감 전, 계정 정상일 때만 가능. 방 오픈/전원 확정 기준은 정책 설정에 따라 처리하며 v0.2 기준을 임의 채택하지 않음.
+**처리·검증:** 본인 decision PENDING→ACCEPTED. 확정 마감 전, 계정 정상일 때만 가능. 이미 ACCEPTED면 같은 응답. 확정한 사람부터 바로 채팅방에 들어간다: 확정할 때마다 방을 열어 두고(이미 열려 있으면 그대로) 그 멤버가 방에 접근할 수 있게 한다(기획 답변 v2 #9, 화면정의서 v0.3.1 S-05; 대표는 계좌 등록 시점에 입장). 남은 멤버(PENDING·ACCEPTED)가 전원 확정하면 팟을 PREPAYING으로 변경. 확정 마감까지 확정하지 않은 멤버는 팟에서 빠지고 대표가 확정하지 않으면 팟이 해산되는 처리는 서버 내부 작업(확정 마감 처리, 1분마다)이 담당한다. 빠진 멤버의 decision은 DECLINED, 신청은 FAILED이며 따로 알림은 보내지 않는다(화면정의서에 문구 없음). 해산이면 확정한 사람에게 "대표가 빠져서 이번 동승이 취소됐어요"(대표 미확정) 또는 "이번엔 매칭되지 않았어요"(확정 인원 부족) 알림.
 
 **업무 오류:** `409 CONFIRMATION_DEADLINE_PASSED`, `409 INVALID_STATE`, `503 POLICY_NOT_CONFIGURED`
 
@@ -600,7 +634,7 @@
 
 **요청 본문:** 없음
 
-**처리·검증:** 출발 15분 전까지만 허용하는 원본 규칙 적용. 경계는 제안으로 now <= departureAt-15m. PENDING이면 DECLINED, ACCEPTED이면 LEFT. 관련 신청은 CANCELLED로 종료. 이탈로 구성 변경 시 경로·예상금액 재계산. SENT/RECEIVED 금액이나 대표 교체가 얽히면 정책 확정 전 자동 처리 금지.
+**처리·검증:** 출발 15분 전까지만 허용(now <= departureAt-15m). PENDING이면 DECLINED, ACCEPTED이면 LEFT. 관련 신청은 CANCELLED로 종료. 이미 빠졌으면 같은 응답. 본인이 보냈거나 받은 SENT/RECEIVED 송금이 있으면 자동 처리 금지(409 FUNDS_ALREADY_IN_FLIGHT). 대표가 빠지거나 남은 인원이 1명이면 팟 해산(CANCELLED), 남은 사람 신청은 FAILED로 바꾸고 매칭 실패 알림(대표 승계 없음, 기획 답변·화면정의서 v0.3 S-05). 2명 이상 남으면 기존 하차 순서에서 빠진 사람만 지워 경로를 재계산하고 route_version 증가(대표 유지). 경로를 재계산한 뒤 새 전체 예상 요금으로 정산의 `reEstimate`가 남은 사람의 예상 분담액을 다시 계산한다(화면정의서 S-06 더보기 "남은 사람 예상 분담액 다시 계산"; 이미 보낸 선송금은 바꾸지 않는다. 선송금은 집결 시각에 시작하고 방 나가기는 출발 15분 전에 마감되어 화면 흐름상 겹치지 않는다). 확정 마감 처리에서 미확정 멤버를 뺄 때도 같은 재계산을 한다.
 
 **업무 오류:** `409 CANCELLATION_DEADLINE_PASSED`, `409 FUNDS_ALREADY_IN_FLIGHT`, `503 POLICY_NOT_CONFIGURED`
 
@@ -614,11 +648,11 @@
 
 **요청 본문:** 없음
 
-**처리·검증:** 유효 일반 멤버 전원의 PREPAY가 RECEIVED여야 함. 대표만 taxi_called_at을 한 번 기록. 외부 택시 호출 API를 실행하거나 호출 사실을 자동 검증하지 않음.
+**처리·검증:** 대표만 가능(대표가 아닌 참여자는 403 FORBIDDEN). 팟이 PREPAYING일 때만 가능(아니면 409 INVALID_STATE). taxi_called_at을 한 번 기록하고 팟을 READY로 변경, 이미 기록했으면 같은 응답. 확정한 일반 멤버에게 알림(제목 "{대표 이름}님이 택시를 불렀어요", 본문 "타면 채팅방에서 탔어요를 눌러 주세요"; 기획 답변 v2 #13). 선송금 수령 여부는 확인하지 않음(입금 확인은 대표가 은행 앱에서 직접, 기획 답변 5·화면정의서 v0.3 S-06 대표 · 받을 금액 확인). 외부 택시 호출 API를 실행하거나 호출 사실을 자동 검증하지 않음. 채팅방 "택시를 불렀어요" 시스템 메시지는 채팅 쪽에서 추가 예정.
 
-**업무 오류:** `409 PREPAY_NOT_COMPLETED`, `409 INVALID_STATE`
+**업무 오류:** `403 FORBIDDEN`, `409 INVALID_STATE`
 
-**ERD 연결:** `ride_parties`, `settlement_items`, `transfers`
+**ERD 연결:** `ride_parties`, `notifications`
 
 ### API-26 · POST /parties/{partyId}/boarding · 본인 탑승·미탑승 기록
 
@@ -634,7 +668,7 @@
 }
 ```
 
-**처리·검증:** 본인 참여가 ACCEPTED이고 집결 단계일 때만 기록. BOARDED면 journey.outcome=POOL_BOARDED. MISSED는 사실만 기록하며 자동 전액 환급·제재를 실행하지 않음. 한 번 확인한 값을 다른 값으로 변경하려면 운영 정정 정책 필요. BOARDED가 기록되면 팟을 RIDING으로 전환할 수 있지만 실제 정산은 하차 후 대표 동작으로 진행한다.
+**처리·검증:** 본인 참여가 ACCEPTED이고, 팟이 PREPAYING/READY/RIDING이고, 탑승 확인 시간(출발 15분 전부터 출발 1시간 뒤까지, 화면정의서 v0.3 S-06)일 때만 기록. 아니면 409 BOARDING_NOT_ALLOWED. BOARDED면 journey.outcome=POOL_BOARDED(outcomeSource=BOARDING_CONFIRMATION)이고 팟을 RIDING으로 전환. MISSED는 사실만 기록하며 자동 전액 환급·제재를 실행하지 않음(정산은 전원 탄 것으로 계산, 기획 답변). 같은 값 재전송은 같은 응답, 다른 값으로 변경은 409 BOARDING_ALREADY_RECORDED. 실제 정산은 하차 후 대표 동작으로 진행한다.
 
 **업무 오류:** `409 BOARDING_NOT_ALLOWED`, `409 BOARDING_ALREADY_RECORDED`, `503 POLICY_NOT_CONFIGURED`
 
@@ -650,7 +684,13 @@
 
 **요청 본문:** 없음
 
-**처리·검증:** 승인된 방 오픈 조건을 만족한 ACCEPTED 멤버에게만 접근. 방/계좌/정산 카드 정보를 구분. 확인 코드는 접근 가능한 확정 멤버에게만 노출. 방이 아직 생성되지 않았으면 409 ROOM_NOT_READY.
+**처리·검증:** 화면 정의서 v0.4 S-05·S-06에 따라 첫 멤버 확정 시 팟당 방을 하나 생성하고, 전원 확정을 기다리지 않고 ACCEPTED 멤버부터 입장합니다. 방이 없으면 409 ROOM_NOT_READY, 팟 외 사용자는 404, 미확정·이탈 멤버는 403입니다. 대표는 본인의 PREPAY_RECEIVE 계좌 등록 이후에 채팅방 조회·이력 조회·전송이 가능하며, 미등록이면 409 ROOM_NOT_READY입니다. 대표 계좌 등록에 필요한 내부 roomId는 기존 API-23 확정 응답 또는 API-22 팟 조회에서 받습니다. 방 내부 생성과 대표의 채팅 입장 허용 시점은 구분합니다.
+
+**응답 범위:** 기존 Room 필드를 유지합니다. 4자리 확인 코드는 매칭에서 생성한 기존 암호화 값을 읽어 선행 0을 유지한 문자열로 반환합니다. 거점·멤버 이름·학교·하차 동 등 팟 표시 정보와 나가기·택시 호출·탑승 버튼은 API-22~26을 사용하고 계좌·정산 카드는 해당 API를 별도로 조회합니다. 성공 응답은 Cache-Control: no-store입니다.
+
+**방 수명:** 출발 +1시간과 대표의 정산 확정 시각(settlements.finalized_at) 중 늦은 시각에 종료합니다. 정산 생성 전 또는 미확정이면 종료를 연장하며, 실제 외부 송금 수령 확인까지 기다리는 규칙은 추가하지 않습니다. 팟 해산은 즉시 종료합니다. 종료 후 방·이력 조회는 410 ROOM_ACCESS_EXPIRED, 전송은 409 ROOM_CLOSED이며 완료한 전송의 재시도도 현재 접근 권한·수명을 검사합니다. 1분 주기 작업이 상태를 CLOSED로 기록하고 계좌를 삭제하며, 요청도 같은 시각 조건을 검사해 작업 주기 사이에 접근하지 못하게 합니다. 계좌 삭제 시 transfers.receiver_account_id만 NULL로 바꾸고 금액·송수신 확인 이력은 보존합니다. 정산 확정 기능과의 실제 연결 검증은 해당 담당 작업과 함께 확인해야 합니다.
+
+**보존 구분:** 방 접근 종료와 채팅 기록의 물리 삭제는 다릅니다. 기획 질문 v3에 따라 API-30은 신고 시점까지 방 전체 대화의 증거 사본을 별도 보관하고 신고 접수부터 7일 뒤 사본·설명을 정리합니다. 이 정리는 이용 중인 채팅방의 메시지를 삭제하지 않습니다. 일반 대화의 물리 삭제 기준은 별도이며 Room.deleteAfter는 null입니다. 방 생성·개인정보 주의·집결 10분 전·멤버 이탈·택시 호출 안내는 서버 전용 SYSTEM 메시지로 중복 없이 기록합니다. 집결 안내는 출발 10분 전부터 출발 전까지 1분 주기로 생성하며, 시스템 메시지는 수정·삭제 API를 제공하지 않습니다.
 
 **업무 오류:** `409 ROOM_NOT_READY`, `410 ROOM_ACCESS_EXPIRED`
 
@@ -670,9 +710,11 @@
 
 **요청 본문:** 없음
 
-**처리·검증:** 허용된 멤버와 보존 기간 내에서 조회. afterId는 새 메시지를 ID 오름차순, beforeId는 과거 페이지를 ID 내림차순 반환. 둘 동시 입력 금지. 초기 조회는 최신 페이지부터. MVP는 cursor 폴링으로 구현하는 제안.
+**처리·검증:** API-27과 동일한 확정 멤버·대표 계좌·방 수명 조건으로 조회합니다. HTTP cursor 폴링을 구현하며 WebSocket/SSE는 도입하지 않습니다. afterId는 해당 ID보다 큰 신규 메시지를 ID 오름차순, beforeId는 해당 ID보다 작은 과거 메시지를 ID 내림차순으로 반환합니다. 두 값 동시 입력, 양수가 아닌 ID, limit 범위 위반은 422 VALIDATION_ERROR입니다. 초기 조회는 최신 페이지부터 ID 내림차순입니다. 마스킹된 저장 본문만 반환하고 응답은 Cache-Control: no-store입니다.
 
-**업무 오류:** `410 ROOM_ACCESS_EXPIRED`
+**페이지 정보:** 성공 본문은 data: Message[]와 meta: MessagePageMeta입니다. nextBeforeId는 과거 방향에 다음 페이지가 있을 때 마지막 반환 ID이며 신규 조회에서는 null입니다. latestId는 이번 응답 중 가장 큰 ID이며 빈 결과에서는 null입니다. hasMore는 요청 방향에 남은 페이지가 있는지 표시합니다. 신규 조회에서 hasMore=true이면 이번 latestId를 afterId로 다음 페이지를 이어 조회합니다. 빈 결과에서는 프런트가 기존 신규 조회 기준 ID를 유지합니다. 팟 잠금으로 메시지 쓰기·조회·이탈을 직렬화하여 미커밋 메시지로 인한 커서 누락을 방지합니다.
+
+**업무 오류:** `401 UNAUTHENTICATED`, `403 FORBIDDEN`, `403 ACCOUNT_SUSPENDED`, `404 RESOURCE_NOT_FOUND`, `409 ROOM_NOT_READY`, `410 ROOM_ACCESS_EXPIRED`, `422 VALIDATION_ERROR` 및 공통 오류
 
 **ERD 연결:** `chat_messages`, `chat_rooms`, `party_members`
 
@@ -691,9 +733,15 @@
 }
 ```
 
-**처리·검증:** OPEN 방의 유효 멤버만 전송. sender는 세션으로 결정. 전화번호·링크·계좌를 서버에서 가린 뒤 저장·응답·알림. 같은 clientMessageId+같은 본문은 기존 결과, 다른 본문이면 충돌. SYSTEM 타입은 서버만 생성.
+**처리·검증:** API-27과 동일한 확정 멤버·대표 계좌 조건을 적용하며 OPEN 방에서만 전송합니다. 로그인 쿠키·X-CSRF-Token·UUID Idempotency-Key가 필수입니다. clientMessageId도 UUID 문자열이고 text는 JSON 문자열만 허용합니다. v0.4 기준 공백만 있는 메시지와 200자를 초과한 입력은 422 VALIDATION_ERROR입니다(Java 문자열 길이 기준). 정의하지 않은 senderMemberId·messageType 등도 422입니다. senderMemberId는 세션의 팟 멤버에서 결정하고 SYSTEM은 서버만 생성합니다.
 
-**업무 오류:** `409 ROOM_CLOSED`, `422 MESSAGE_REJECTED`, `409 IDEMPOTENCY_CONFLICT`
+**마스킹:** 유니코드 NFKC 정규화와 포맷 문자 제거 후 전화번호·공백/하이픈/점/슬래시(`/`)/밑줄(`_`) 등 구분자 포함 8자리 이상 숫자·웹 링크를 '가려진 번호'로 치환하고 앞뒤 공백을 제거하여 저장·응답합니다. 예를 들어 `010/1234/5678`과 `1234_5678_9012`도 가립니다. 4자리 확인 코드는 그대로 보존합니다. 마스킹 후 표시할 내용이 없으면 422 MESSAGE_REJECTED입니다. 원문은 DB·로그·알림에 저장하지 않으며 응답은 Cache-Control: no-store입니다. 이 API 자체에서 별도 푸시 발송은 추가하지 않습니다.
+
+**재시도·동시성:** 같은 사용자·방·clientMessageId·원문 text와 같은 키는 기존 메시지를 201로 반환합니다. 같은 clientMessageId의 동일 요청을 새 키로 재전송해도 같은 메시지입니다. 같은 키 또는 같은 clientMessageId의 다른 사용자·방·본문은 409 IDEMPOTENCY_CONFLICT입니다. 마스킹 결과가 같아도 서로 다른 원문은 충돌하며 원문 대신 VERIFICATION_SECRET 기반 HMAC으로 비교합니다. 키·client UUID·팟 순서의 잠금과 메시지/멱등 기록의 단일 트랜잭션으로 중복 생성과 부분 저장을 방지합니다. 현재 멤버·대표 계좌·방 수명을 재시도에도 확인하고 이탈·종료 뒤에는 과거 성공 결과를 재노출하지 않습니다.
+
+**저장:** chat_messages에 request_hash와 서버 전용 system_event_key(UNIQUE), (room_id,id) 인덱스를 추가했습니다. chat_send_receipts는 키·요청 HMAC·메시지 ID만 저장하며 메시지 보존 기간 동안 유지합니다. 추후 메시지 물리 삭제를 구현할 때 이 기록도 함께 정리해야 합니다. 기존 VERIFICATION_SECRET(32바이트 이상)을 재사용하며 새 필수 환경변수는 없습니다.
+
+**업무 오류:** `401 UNAUTHENTICATED`, `403 FORBIDDEN`, `403 ACCOUNT_SUSPENDED`, `404 RESOURCE_NOT_FOUND`, `409 ROOM_NOT_READY`, `409 ROOM_CLOSED`, `422 VALIDATION_ERROR`, `422 MESSAGE_REJECTED`, `409 IDEMPOTENCY_CONFLICT`, `503 POLICY_NOT_CONFIGURED` 및 공통 오류
 
 **ERD 연결:** `chat_messages`, `chat_rooms`
 
@@ -701,7 +749,7 @@
 
 **권한:** 해당 방 접근권한을 가진 참여자 (`ROOM_MEMBER`) · **성공:** 201 · 응답 `data: SafetyReport`
 
-경로 `roomId` 필수 · `Idempotency-Key` 필수
+경로 `roomId`는 양의 bigint · 로그인 세션 쿠키, UUID `Idempotency-Key`, `X-CSRF-Token` 필수 · operationId: `reportMember`
 
 **요청 본문:** `ReportCreate` · application/json
 
@@ -714,9 +762,32 @@
 }
 ```
 
-**처리·검증:** 본인 외 같은 팟 참여자만 대상. messageId를 보냈다면 같은 방·대상 작성 메시지인지 검증. 신고와 정규화된 사용자 쌍 차단을 원자적으로 생성. details/증거는 마스킹 후 암호화. 신고 횟수 제재는 자동 적용하지 않음.
+**성공 응답 예시:**
 
-**업무 오류:** `422 INVALID_REPORT_TARGET`, `503 POLICY_NOT_CONFIGURED`
+```json
+{
+  "data": {
+    "id": "801",
+    "status": "RECEIVED",
+    "evidenceDeleteAfter": "2026-11-12T23:21:00+09:00",
+    "rematchingBlocked": true
+  }
+}
+```
+
+**접근·대상 검증:** 현재 채팅방에 입장 가능한 ACCEPTED 학생만 신고합니다. 팟 외 사용자는 404, 미확정·이탈 멤버는 403, 대표 계좌 미등록은 409 ROOM_NOT_READY, 종료된 방은 409 ROOM_CLOSED입니다. 본인을 제외한 같은 팟의 멤버만 대상이며 대상이 이미 이탈했어도 같은 팟 소속이면 신고할 수 있습니다. messageId는 선택 사항이며, 전달하면 같은 방에서 대상이 작성한 USER 메시지여야 합니다. 본인·없는 멤버·타 팟 멤버·타 방/다른 작성자/SYSTEM/없는 메시지는 422 INVALID_REPORT_TARGET입니다. 노쇼·확인 코드 불일치는 사용자가 고르는 사유이며 자동 판정하지 않습니다.
+
+**입력·저장:** ID는 양의 bigint 범위 JSON 문자열, 사유는 정의된 5개 코드 중 하나입니다. details는 선택 JSON 문자열이며 v0.4 기준 최대 200자(Java 문자열 길이)입니다. OTHER에도 설명을 필수로 요구하지 않습니다. 알 수 없는 필드와 문자열 아닌 값은 422 VALIDATION_ERROR입니다. 신고 접수 시점까지의 해당 방 전체 대화(USER·SYSTEM)와 선택 설명을 기존 번호·링크·계좌 마스킹 후 암호화해 사본으로 저장합니다. 이후 대화는 이 사본에 추가하지 않습니다. 캡처 첨부·파일 업로드와 운영자 신고 검토 API는 이번 범위에 없습니다. 응답은 기존 SafetyReport 필드를 유지하고 Cache-Control: no-store를 적용하며 설명·증거 원문을 반환하지 않습니다.
+
+**중복·재시도:** 기획 질문 v3 기준 같은 방에서 동일 신고자가 동일 대상을 한 번만 신고합니다. 새 키로 사유·메시지·설명을 바꿔 다시 신고해도 409 REPORT_ALREADY_EXISTS입니다. 다른 방의 신고와 상대방의 역방향 신고는 별개입니다. 동일 키·동일 사용자·방·대상·사유·messageId·설명 원문은 기존 신고 ID·만료 시각을 201로 반환하고 사본을 다시 만들거나 만료를 연장하지 않습니다. 같은 키에 다른 입력은 409 IDEMPOTENCY_CONFLICT이며, 마스킹 결과가 같아도 원문이 다르면 충돌합니다. 키는 UUID 대소문자를 정규화합니다. 재시도도 현재 접근 권한과 방 수명을 검사합니다.
+
+**재매칭 차단:** 신고·증거·멱등 기록·정규화한 사용자 쌍 차단을 하나의 트랜잭션으로 저장합니다. 사용자 ID의 작은 값/큰 값 순서로 user_blocks에 기록하고 기존 관계는 유지합니다. 기존 매칭과 슬롯 대기 인원 조회의 차단 필터를 재사용합니다. 신고 후 현재 팟을 해산하거나 대화를 차단하지 않으며, 신고 횟수에 따른 자동 제외·노쇼 기록·이용 정지는 적용하지 않습니다.
+
+**보존·정리:** 각 신고의 접수 시각부터 정확히 7일을 evidenceDeleteAfter로 반환합니다. 다른 신고와 별도로 계산하고 연장하지 않습니다. 1분 주기 정리 작업이 만료 시각 이하인 신고의 암호화 사본(설명 포함)과 messageId 참조를 NULL로 지웁니다. 원래 채팅 메시지와 다른 미만료 신고 증거는 유지합니다. 신고 ID·방·당사자·사유·상태 등 접수 메타데이터와 멱등 HMAC은 중복 방지·재시도를 위해 유지하며, 사본 삭제 후에도 재매칭 차단을 유지합니다. 증거를 조회하는 사용자 API는 제공하지 않습니다.
+
+**DB·설정:** safety_reports의 (room_id,reporter_member_id,target_member_id) UNIQUE와 evidence_delete_after 인덱스, safety_report_receipts(request_key PK, request_hash HMAC, report_id)가 추가됩니다. 기존 암호화 키와 VERIFICATION_SECRET(32바이트 이상)을 재사용하며 새 필수 환경변수는 없습니다.
+
+**업무 오류:** `401 UNAUTHENTICATED`, `403 FORBIDDEN`, `403 ACCOUNT_SUSPENDED`, `404 RESOURCE_NOT_FOUND`, `409 ROOM_NOT_READY`, `409 ROOM_CLOSED`, `409 REPORT_ALREADY_EXISTS`, `409 IDEMPOTENCY_CONFLICT`, `422 VALIDATION_ERROR`, `422 INVALID_REPORT_TARGET`, `503 POLICY_NOT_CONFIGURED` 및 공통 오류
 
 **ERD 연결:** `safety_reports`, `user_blocks`, `chat_messages`, `party_members`
 
@@ -766,39 +837,11 @@
 
 **요청 본문:** 없음
 
-**처리·검증:** 대표에게 모든 개인 정산, 일반 멤버에게 본인 항목만 반환. 타인 환급 계좌와 정확한 경로는 포함하지 않음. 생성 전에는 409 SETTLEMENT_NOT_READY.
+**처리·검증:** 대표·일반 멤버 모두에게 팟 전원의 개인 정산 항목을 반환(정산내역-멤버 화면이 전원 분담·송금 현황을 보여줌). 타인 환급 계좌번호와 정확한 경로는 포함하지 않음(계좌번호는 응답 DTO에 없고 API-31로 인가된 송금자에게만). 생성 전에는 409 SETTLEMENT_NOT_READY.
 
 **업무 오류:** `409 SETTLEMENT_NOT_READY`
 
 **ERD 연결:** `settlements`, `settlement_items`, `transfers`, `party_members`
-
-### API-34 · POST /parties/{partyId}/settlement/receipt · 대표 결제 화면 첨부
-
-**권한:** 해당 팟 대표 (`REPRESENTATIVE`) · **성공:** 201 · 응답 `data: Receipt`
-
-경로 `partyId` 필수 · `Idempotency-Key` 필수 · `If-Match` 필수 · 성공 응답 `ETag`
-
-**요청 본문:** `ReceiptUpload` · multipart/form-data (`file` 바이너리 1개)
-
-**처리·검증:** multipart/form-data file 1개. 제안 제한 JPEG/PNG/WebP, 5MiB 이하; 실제 MIME·디코딩 검증, 메타데이터 제거, 비공개 객체 저장. 정산 확정 전만 교체 가능. 다른 팟 파일 참조 불가. 영수증은 OCR/결제 사실 자동 검증이 아님.
-
-**업무 오류:** `415 INVALID_FILE_TYPE`, `413 FILE_TOO_LARGE`, `409 SETTLEMENT_FINALIZED`
-
-**ERD 연결:** `settlements`
-
-### API-35 · GET /parties/{partyId}/settlement/receipt · 참여자 결제 화면 열기
-
-**권한:** 해당 팟 참여자 (`PARTY_MEMBER`) · **성공:** 200 · 응답 `data: Download`
-
-경로 `partyId` 필수
-
-**요청 본문:** 없음
-
-**처리·검증:** 해당 팟 참여자에게 만료되는 비공개 URL 발급. 영수증 보관 기간이 지나면 410. 계좌나 신용카드 민감 항목 노출을 최소화하도록 업로드 안내/처리 필요.
-
-**업무 오류:** `404 RECEIPT_NOT_FOUND`, `410 RECEIPT_EXPIRED`
-
-**ERD 연결:** `settlements`, `party_members`
 
 ### API-36 · PATCH /parties/{partyId}/settlement/route · 정산 전 실제 하차 순서 수정
 
@@ -840,7 +883,7 @@
 }
 ```
 
-**처리·검증:** 저장하지 않는 계산. 원본 상한 actualTotalWon <= floor(estimatedTotalWon*1.2). 예정 경로 구간거리/구간 탑승 인원으로 나누고 원 단위 나머지 배분. 대표 환급 0, 일반 멤버 음수 환급/미탑승 예외는 canFinalize=false와 사유 반환.
+**처리·검증:** 저장하지 않는 계산. 원본 상한 actualTotalWon <= floor(estimatedTotalWon*1.2). 예정 경로 구간거리/구간 탑승 인원으로 나누고 원 단위 나머지 배분. 차액 = 선송금 − 확정 분담(양수 환급 대표→멤버, 음수 추가 납부 멤버→대표). 대표 환급 0. 음수 차액(추가 납부)은 디자인(S-06w)에 따라 허용하여 확정을 막지 않는다(canFinalize=true). blockingReasons 는 미탑승 등 후속 정책용으로 지금은 빈 목록.
 
 **업무 오류:** `422 FARE_LIMIT_EXCEEDED`, `409 ROUTE_VERSION_CONFLICT`, `409 INVALID_ROUTE_DISTANCE`, `409 SETTLEMENT_FINALIZED`
 
@@ -861,7 +904,7 @@
 }
 ```
 
-**처리·검증:** 미리보기 결과를 신뢰하지 않고 잠금 후 재계산. 정상인 경우 개인 부담 합계=실제 요금, finalized_at 기록, 양수 환급만 PENDING REFUND 생성, 대표/0원 환급은 이체 없이 완료. 영수증 권한 거절 시 금액만 입력하는 원본 경로 허용. 음수 환급이 발견되면 REVIEW_REQUIRED 상태만 기록하고 409 반환하며 finalized_at·이체·확정 부담액은 생성/갱신하지 않는 예외를 명시.
+**처리·검증:** 미리보기 결과를 신뢰하지 않고 재계산. 선송금 전원 수령(RECEIVED) 전이면 409 PREPAY_NOT_COMPLETED. 개인 부담 합계=실제 요금, finalized_at·actual_total_won 기록. 차액 = 선송금 − 확정 분담: 양수 환급은 PENDING REFUND 이체(대표→멤버) 생성, 음수 차액은 추가 납부로 허용하여 이체 없이 항목에 음수로 기록(멤버가 수동 송금, 디자인 S-06w), 대표/0원은 이체 없이 완료. 차액이 남으면 정산 REFUNDING·항목 REFUND_PENDING, 없으면 COMPLETED. 확정 직전 조회 ETag 를 If-Match 로 확인(불일치 412). 이미 확정됐으면 같은 응답(멱등).
 
 **업무 오류:** `422 FARE_LIMIT_EXCEEDED`, `409 ROUTE_VERSION_CONFLICT`, `409 PREPAY_NOT_COMPLETED`, `409 ADDITIONAL_PAYMENT_POLICY_REQUIRED`, `409 BOARDING_POLICY_REQUIRED`, `409 SETTLEMENT_FINALIZED`
 
@@ -1103,8 +1146,8 @@
 
 | 필드 | 타입 | 필수 | 의미·제약 |
 | --- | --- | --- | --- |
-| `genderOptions` | ProfileOption[] | 예 | 승인된 성별 선택지. 값은 서버 설정 기준 |
-| `sameGenderDefault` | boolean | 예 | 기본 true |
+| `genderOptions` | ProfileOption[] | 예 | FEMALE/여성, MALE/남성 순서 |
+| `sameGenderDefault` | boolean | 예 | 초기 기본값 true. 가입 시 켜기·끄기 모두 허용 |
 
 ### Bank
 
@@ -1119,6 +1162,7 @@
 | --- | --- | --- | --- |
 | `id` | string | 예 | 고정 거점 ID; 형식: `^[1-9][0-9]*$` |
 | `universityId` | string / null | 예 | 공용이면 NULL |
+| `universityName` | string / null | 예 | 학교 이름; 공용이면 NULL |
 | `name` | string | 예 | 거점명 |
 | `point` | Point | 예 | 해당 DTO 참조 |
 | `meetingNote` | string | 예 | 공개 집결 안내 |
@@ -1129,6 +1173,7 @@
 | --- | --- | --- | --- |
 | `id` | string | 예 | 계정 ID; 형식: `^[1-9][0-9]*$` |
 | `universityId` | string | 예 | 소속 대학 ID; 형식: `^[1-9][0-9]*$` |
+| `universityName` | string | 예 | 소속 대학명. 가입·현재 세션 조회 응답에 포함 |
 | `email` | string (email) | 예 | 본인 이메일 |
 | `role` | string | 예 | 역할; STUDENT / STAFF |
 | `status` | string | 예 | 계정 상태; ACTIVE / SUSPENDED / WITHDRAWN |
@@ -1150,33 +1195,33 @@
 | `genderCode` | string | 예 | 가입 시 확정한 성별 코드 |
 | `sameGenderDefault` | boolean | 예 | 동성 기본 설정 |
 | `defaultDongId` | string | 예 | 기본 행정동; 형식: `^[1-9][0-9]*$` |
+| `defaultDongName` | string | 예 | 기본 하차 행정동 이름 |
 | `defaultDropoff` | Point | 예 | 해당 DTO 참조 |
 
 ### ProfileInput
 
 | 필드 | 타입 | 필수 | 의미·제약 |
 | --- | --- | --- | --- |
-| `realName` | string | 예 | 실명; 제안 검증 범위 1~50자; 최소 1자; 최대 50자 |
+| `realName` | string | 예 | 실명; 앞뒤 공백 제거 후 2~20자 |
 | `genderCode` | string | 예 | ProfileOptions의 승인된 코드; 최소 1자; 최대 32자 |
-| `sameGenderDefault` | boolean | 아니오 | 생략하면 true; 기본 true |
+| `sameGenderDefault` | boolean | 아니오 | true/false 선택값 저장. 생략/null이면 true |
 | `defaultDropoff` | Point | 예 | 해당 DTO 참조 |
 
 ### ProfilePatch
 
 | 필드 | 타입 | 필수 | 의미·제약 |
 | --- | --- | --- | --- |
-| `realName` | string | 아니오 | 본인 실명 수정; 최소 1자; 최대 50자 |
-| `sameGenderDefault` | boolean | 아니오 | 이후 신청 기본값 |
-| `defaultDropoff` | Point | 아니오 | 해당 DTO 참조 |
+| `sameGenderDefault` | boolean | 아니오 | 이후 신청 기본값. true/false 모두 허용, 명시적 null은 거부 |
+| `defaultDropoff` | Point | 아니오 | 기본 하차 좌표. 위도·경도 모두 숫자로 전달, 명시적 null은 거부 |
 
-최소 1개 필드를 포함해야 합니다.
+최소 1개 필드를 포함해야 합니다. 생략한 필드는 유지합니다. 이름·학교·이메일·성별 변경은 허용하지 않습니다(S-08 기준).
 
 ### EmailVerificationRequest
 
 | 필드 | 타입 | 필수 | 의미·제약 |
 | --- | --- | --- | --- |
 | `universityId` | string | 예 | 선택 대학; 형식: `^[1-9][0-9]*$` |
-| `email` | string (email) | 예 | 해당 대학 허용 이메일; 최대 254자 |
+| `email` | string (email) | 예 | 해당 대학 허용 이메일; 현재 구현은 최대 255자 |
 
 ### EmailVerification
 
@@ -1210,14 +1255,14 @@
 
 | 필드 | 타입 | 필수 | 의미·제약 |
 | --- | --- | --- | --- |
-| `verificationToken` | string | 예 | 새 이메일 검증으로 발급한 증표; 재로그인 방식은 제안 |
+| `verificationToken` | string | 예 | 학교 이메일 OTP 재인증으로 발급한 증표. 공백 불가, 최대 512자 |
 
 ### StaffLogin
 
 | 필드 | 타입 | 필수 | 의미·제약 |
 | --- | --- | --- | --- |
-| `email` | string (email) | 예 | 발급된 관계자 이메일 |
-| `password` | string (password) | 예 | 비밀번호; 최소 1자 |
+| `email` | string (email) | 예 | 발급된 관계자 이메일. 앞뒤 공백 제거·소문자, 최대 255자, JSON 문자열만 허용 |
+| `password` | string (password) | 예 | 비어 있지 않은 UTF-8 72바이트 이하. 공백 보존, JSON 문자열만 허용 |
 
 ### TravelOptionsRequest
 
@@ -1238,6 +1283,9 @@
 | `toName` | string | 예 | 도착 지점 |
 | `departureAt` | string (date-time) | 예 | 구간 출발 |
 | `arrivalAt` | string (date-time) | 예 | 구간 도착 |
+| `distanceM` | integer / null | 예 | 걷는 구간 거리(m); 버스 구간이면 null |
+| `stopCount` | integer / null | 예 | 버스로 가는 정류장 수; 걷기면 null |
+| `lastBus` | boolean | 예 | 오늘 이 방향 마지막 버스인지 |
 
 ### TransitOption
 
@@ -1246,8 +1294,9 @@
 | `available` | boolean | 예 | 안내 가능한 막차 존재 여부 |
 | `lastLeaveAt` | string (date-time) / null | 예 | 현재 위치 기준 출발 마감; 위치 없으면 거점 기준 |
 | `arrivalAt` | string (date-time) / null | 예 | 예상 도착 |
-| `estimatedCostWon` | integer / null | 예 | 예상 교통비 |
-| `legs` | TransitLeg[] | 예 | 제공 가능한 환승 경로 |
+| `estimatedCostWon` | integer / null | 예 | 예상 교통비(1인, 교통카드 기준) |
+| `totalDurationMin` | integer / null | 예 | 버스를 탄 뒤 도착까지 걸리는 분(화면의 큰 글씨 "43분"; 정의 확인 필요) |
+| `legs` | TransitLeg[] | 예 | 제공 가능한 환승 경로(걷기 → 버스 → 걷기) |
 | `sourceLabel` | string | 예 | 출처와 관측·추정 구분 |
 | `asOf` | string (date-time) | 예 | 자료 확인 시각 |
 
@@ -1256,11 +1305,16 @@
 | 필드 | 타입 | 필수 | 의미·제약 |
 | --- | --- | --- | --- |
 | `transit` | TransitOption | 예 | 해당 DTO 참조 |
-| `soloTaxiEstimatedWon` | integer / null | 예 | 혼자 택시 추정 비용 |
-| `poolEstimatedShareWon` | integer / null | 예 | 아직 팟이 없으면 조건별 추정 |
-| `estimatedArrivalAt` | string (date-time) / null | 예 | 택시 예상 도착 |
+| `soloTaxiEstimatedWon` | integer / null | 예 | 혼자 택시 지금 출발 추정 비용 |
+| `soloTaxiDistanceM` | integer / null | 예 | 혼자 택시 거리(m) |
+| `soloTaxiDurationMin` | integer / null | 예 | 혼자 택시 걸리는 분 |
+| `estimatedArrivalAt` | string (date-time) / null | 예 | 택시로 지금 출발하면 도착하는 시각 |
+| `poolEstimatedShareWon` | integer / null | 예 | 동승하면 1인 추정 분담액; 가장 가까운 시간대 대기 인원이 없으면 null |
+| `nearestPoolSlot` | MatchingSlot / null | 예 | 지금 등록할 수 있는 가장 가까운 동승 시간대와 대기 인원 |
 | `destinationDongId` | string | 예 | 핀으로 판별한 동; 형식: `^[1-9][0-9]*$` |
+| `destinationDongName` | string | 예 | 하차 동 이름 |
 | `districtId` | string | 예 | 구 또는 구가 없는 시; 형식: `^[1-9][0-9]*$` |
+| `districtName` | string | 예 | 구(시) 이름 |
 | `asOf` | string (date-time) | 예 | 추정 기준 시각 |
 | `warnings` | string[] | 예 | 불확실성 안내 |
 
@@ -1279,8 +1333,11 @@
 | --- | --- | --- | --- |
 | `id` | string | 예 | 귀가 ID; 형식: `^[1-9][0-9]*$` |
 | `universityId` | string | 예 | 귀가 당시 학교; 형식: `^[1-9][0-9]*$` |
+| `universityName` | string | 예 | 학교 이름 |
 | `pickupPointId` | string | 예 | 출발 거점; 형식: `^[1-9][0-9]*$` |
+| `pickupPointName` | string | 예 | 출발 거점 이름 |
 | `destinationDongId` | string | 예 | 하차 동; 형식: `^[1-9][0-9]*$` |
+| `destinationDongName` | string | 예 | 하차 동 이름 |
 | `intendedDepartureAt` | string (date-time) | 예 | 귀가 예정 시각 |
 | `outcome` | string | 예 | 현재 결과; UNRESOLVED / POOL_BOARDED / BUS_SELECTED / SOLO_SELECTED / CANCELLED |
 | `outcomeAt` | string (date-time) / null | 예 | 결과 시각 |
@@ -1310,8 +1367,11 @@
 | `id` | string | 예 | 신청 ID; 형식: `^[1-9][0-9]*$` |
 | `journeyId` | string | 예 | 귀가 ID; 형식: `^[1-9][0-9]*$` |
 | `pickupPointId` | string | 예 | 거점; 형식: `^[1-9][0-9]*$` |
+| `pickupPointName` | string | 예 | 거점 이름 |
 | `districtId` | string | 예 | 구 또는 시; 형식: `^[1-9][0-9]*$` |
+| `districtName` | string | 예 | 구 또는 시 이름 |
 | `destinationDongId` | string | 예 | 동; 형식: `^[1-9][0-9]*$` |
+| `destinationDongName` | string | 예 | 동 이름 |
 | `departureAt` | string (date-time) | 예 | 출발 슬롯 |
 | `sameGenderOnly` | boolean | 예 | 동성 조건 |
 | `status` | string | 예 | 신청 상태; WAITING / MATCHED / FAILED / CANCELLED / EXPIRED |
@@ -1337,6 +1397,7 @@
 | `universityName` | string | 예 | 학교 |
 | `destinationDongName` | string | 예 | 하차 동만 공개 |
 | `sameGenderAsMe` | boolean | 예 | 본인과 동일 성별 여부 |
+| `gender` | string | 예 | 성별; FEMALE / MALE. 동성 매칭을 끈 사람도 있어 심야에 누구와 타는지 미리 알 수 있게 보여 주는 안전 정보(기획 답변 v2 #12) |
 | `isRepresentative` | boolean | 예 | 대표 여부 |
 | `decision` | string | 예 | 참여 결정; PENDING / ACCEPTED / DECLINED / LEFT / REMOVED_UNPAID |
 | `boardingStatus` | string | 예 | 탑승 확인; UNKNOWN / BOARDED / MISSED |
@@ -1349,14 +1410,17 @@
 | `id` | string | 예 | 팟 ID; 형식: `^[1-9][0-9]*$` |
 | `status` | string | 예 | 팟 상태; FORMING / CONFIRMING / PREPAYING / READY / RIDING / SETTLING / COMPLETED / CANCELLED |
 | `pickupPoint` | PickupPoint | 예 | 해당 DTO 참조 |
+| `districtId` | string | 예 | 같은 방향 매칭 권역(구, 구가 없는 시는 시); 형식: `^[1-9][0-9]*$` |
+| `districtName` | string | 예 | 권역 이름. 홈 동승 진행 중 카드의 "영통구 방향" |
 | `departureAt` | string (date-time) | 예 | 출발 |
+| `confirmDeadlineAt` | string (date-time) / null | 예 | 확정 마감; 막차 전 등록은 막차 타러 출발해야 할 시각, 막차 후 등록은 출발 15분 전. 홈 카드·매칭 결과의 "{HH:MM}까지 확정해 주세요"·남은 시간 |
 | `representativeMemberId` | string / null | 예 | 대표 참여 ID |
 | `myMemberId` | string | 예 | 현재 사용자 참여 ID; 형식: `^[1-9][0-9]*$` |
 | `members` | PartyMember[] | 예 | 개인정보를 제한한 멤버 |
 | `routeVersion` | integer | 예 | 경로 버전; 최소 1 |
 | `taxiCalledAt` | string (date-time) / null | 예 | 대표의 외부 호출 확인 |
 | `roomId` | string / null | 예 | 접근 가능한 방 |
-| `allowedActions` | string[] | 예 | 서버가 계산한 현재 가능한 동작 |
+| `allowedActions` | string[] | 예 | 서버가 계산한 지금 누를 수 있는 버튼; CONFIRM(확정 마감 전·결정 전) / LEAVE(출발 15분 전까지) / CONFIRM_TAXI_CALL(대표, PREPAYING, 미기록) / RECORD_BOARDING(확정 멤버, 출발 15분 전~출발 1시간 뒤, 미기록) |
 
 ### BoardingRequest
 
@@ -1383,7 +1447,7 @@
 | 필드 | 타입 | 필수 | 의미·제약 |
 | --- | --- | --- | --- |
 | `clientMessageId` | string (uuid) | 예 | 재전송 중복 방지 UUID |
-| `text` | string | 예 | 서버 마스킹 전 입력; 최소 1자; 최대 2000자 |
+| `text` | string | 예 | 서버 마스킹 전 입력. v0.4 기준 1~200자(Java 문자열 길이), 공백만 입력 불가, JSON 문자열만 허용 |
 
 ### Message
 
@@ -1403,7 +1467,7 @@
 | `targetMemberId` | string | 예 | 신고 대상 참여자; 형식: `^[1-9][0-9]*$` |
 | `reasonCode` | string | 예 | 사유; ABUSIVE_LANGUAGE / PRIVACY_REQUEST / NO_SHOW / IDENTITY_MISMATCH / OTHER |
 | `messageId` | string | 아니오 | 메시지 신고일 때; 형식: `^[1-9][0-9]*$` |
-| `details` | string | 아니오 | 선택적 설명; 마스킹 후 암호화 증거에 포함; 최대 1000자 |
+| `details` | string | 아니오 | 선택적 설명(OTHER도 선택); 마스킹 후 암호화 증거에 포함; 최대 200자(Java 문자열 길이) |
 
 ### SafetyReport
 
@@ -1411,7 +1475,7 @@
 | --- | --- | --- | --- |
 | `id` | string | 예 | 신고 ID; 형식: `^[1-9][0-9]*$` |
 | `status` | string | 예 | 신고 상태; RECEIVED / REVIEWED / DISMISSED |
-| `evidenceDeleteAfter` | string (date-time) | 예 | 확정 정책으로 산정한 삭제 예정 |
+| `evidenceDeleteAfter` | string (date-time) | 예 | 신고 접수 시각 +7일. 재시도·다른 신고로 연장하지 않음 |
 | `rematchingBlocked` | boolean | 예 | 양쪽 재매칭 차단 적용 |
 
 ### AccountInput
@@ -1463,6 +1527,10 @@
 | --- | --- | --- | --- |
 | `id` | string | 예 | 개인 정산 ID; 형식: `^[1-9][0-9]*$` |
 | `memberId` | string | 예 | 팟 참여 ID; 형식: `^[1-9][0-9]*$` |
+| `maskedName` | string / null | 예 | 마스킹 이름(예: 김*연). S-06 정산 표의 '이름' |
+| `distanceMeters` | integer / null | 예 | 출발지부터 이 멤버 하차까지 누적 거리(m). S-06 '구간'. 핀 없으면 null |
+| `isRepresentative` | boolean | 예 | 대표(마지막 하차자) 여부. 화면 '· 대표'·'결제함' 표기 |
+| `isMe` | boolean | 예 | 조회자 본인 여부. 화면 '나' 표기·'돌려받을 금액' 카드 |
 | `estimatedShareWon` | integer | 예 | 예상 부담; 최소 0 |
 | `prepayDueWon` | integer | 예 | 대표는 0; 최소 0 |
 | `actualShareWon` | integer / null | 예 | 최종 부담 |
@@ -1480,7 +1548,7 @@
 | `actualTotalWon` | integer / null | 예 | 실제 전체 요금 |
 | `routeVersion` | integer | 예 | 계산 경로 버전; 최소 1 |
 | `status` | string | 예 | 상태; ESTIMATED / PREPAYING / AWAITING_FARE / REFUNDING / COMPLETED / REVIEW_REQUIRED |
-| `items` | SettlementItem[] | 예 | 대표에게 전체; 일반 멤버에게 본인 항목만 |
+| `items` | SettlementItem[] | 예 | 대표·일반 멤버 모두 팟 전원 항목; 타인 계좌번호·정확한 경로 제외 |
 | `receiptAvailable` | boolean | 예 | 영수증 존재 여부 |
 | `finalizedAt` | string (date-time) / null | 예 | 정산 확정 |
 | `refundDueAt` | string (date-time) / null | 예 | 환급 기한 |
@@ -1506,7 +1574,7 @@
 | --- | --- | --- | --- |
 | `memberId` | string | 예 | 멤버; 형식: `^[1-9][0-9]*$` |
 | `actualShareWon` | integer | 예 | 계산 부담; 최소 0 |
-| `refundDueWon` | integer | 예 | 대표 0; 음수는 미확정 정책 필요 |
+| `refundDueWon` | integer | 예 | 선송금 − 확정. 양수=환급(대표→멤버), 음수=추가 납부(멤버→대표); 대표 0 |
 
 ### FarePreview
 
@@ -1517,14 +1585,6 @@
 | `items` | FarePreviewItem[] | 예 | 예상 최종 부담 |
 | `canFinalize` | boolean | 예 | 확정 가능 |
 | `blockingReasons` | string[] | 예 | 예: ADDITIONAL_PAYMENT_POLICY_REQUIRED |
-
-### Receipt
-
-| 필드 | 타입 | 필수 | 의미·제약 |
-| --- | --- | --- | --- |
-| `available` | boolean | 예 | 첨부 여부 |
-| `uploadedAt` | string (date-time) | 예 | 업로드 시각 |
-| `contentType` | string | 예 | 허용 이미지; image/jpeg / image/png / image/webp |
 
 ### Download
 
@@ -1693,7 +1753,7 @@
 
 ### 응답 예시
 
-응답은 호출자의 권한에 맞춰 달라집니다. 아래의 일반 멤버 정산에는 본인 항목만 있고, 대표의 확정 응답에는 전원 항목이 있습니다. 예시 날짜·만료 시각은 정책의 확정값이 아닙니다.
+정산 조회·확정 응답에는 호출자 권한과 무관하게 팟 전원의 개인 항목이 `items` 배열로 들어갑니다(타인 계좌번호·정확한 경로는 제외). 예시 날짜·만료 시각은 정책의 확정값이 아닙니다.
 
 ### GET /auth/session · 200 응답 예시
 
@@ -1715,6 +1775,8 @@
 
 ### GET /parties/{partyId}/settlement · 200 응답 예시
 
+조회자가 대표든 일반 멤버든 **팟 전원의 개인 항목이 `items` 배열로** 내려온다(타인 계좌번호·정확한 경로는 제외). 아래는 대표(503)와 일반 멤버(501)로 이뤄진 팟 예시.
+
 ```json
 {
   "data": {
@@ -1728,6 +1790,10 @@
       {
         "id": "10001",
         "memberId": "501",
+        "maskedName": "김*연",
+        "distanceMeters": 8000,
+        "isRepresentative": false,
+        "isMe": true,
         "estimatedShareWon": 5000,
         "prepayDueWon": 6000,
         "actualShareWon": 5000,
@@ -1757,6 +1823,20 @@
             "receivedAt": null
           }
         ]
+      },
+      {
+        "id": "10002",
+        "memberId": "503",
+        "maskedName": "이*준",
+        "distanceMeters": 16000,
+        "isRepresentative": true,
+        "isMe": false,
+        "estimatedShareWon": 25000,
+        "prepayDueWon": 0,
+        "actualShareWon": 25000,
+        "refundDueWon": 0,
+        "status": "COMPLETED",
+        "transfers": []
       }
     ],
     "receiptAvailable": true,
@@ -1782,6 +1862,10 @@
       {
         "id": "10001",
         "memberId": "501",
+        "maskedName": "김*연",
+        "distanceMeters": 8000,
+        "isRepresentative": false,
+        "isMe": false,
         "estimatedShareWon": 5000,
         "prepayDueWon": 6000,
         "actualShareWon": 5000,
@@ -1815,6 +1899,10 @@
       {
         "id": "10002",
         "memberId": "502",
+        "maskedName": "한*윤",
+        "distanceMeters": 12000,
+        "isRepresentative": false,
+        "isMe": false,
         "estimatedShareWon": 8750,
         "prepayDueWon": 10500,
         "actualShareWon": 8750,
@@ -1848,6 +1936,10 @@
       {
         "id": "10003",
         "memberId": "503",
+        "maskedName": "이*준",
+        "distanceMeters": 16000,
+        "isRepresentative": true,
+        "isMe": true,
         "estimatedShareWon": 16250,
         "prepayDueWon": 0,
         "actualShareWon": 16250,
@@ -1990,6 +2082,7 @@
 | 409 | `PREPAY_NOT_COMPLETED` | 유효 멤버의 선송금 수령 확인 미완료 |
 | 409 | `REPORT_CONTENT_UNAVAILABLE` | 출력 시점에 사용할 수 없는 후보 |
 | 409 | `REPORT_NOT_READY` | 출력 파일이 준비되지 않음 |
+| 409 | `REPORT_ALREADY_EXISTS` | 같은 방에서 동일 신고자가 이미 신고한 대상 |
 | 409 | `REPRESENTATIVE_CHANGE_REQUIRES_POLICY` | 대표 교체와 기수령금 처리 정책 필요 |
 | 409 | `REQUEST_ALREADY_MATCHED` | 이미 팟에 배정된 신청 |
 | 409 | `ROOM_CLOSED` | 닫힌 방에 쓰기 불가 |
@@ -2033,21 +2126,21 @@
 
 | 항목 | 이 명세의 처리 |
 | --- | --- |
-| 학생 재로그인·세션 | 이메일 OTP 재로그인과 서버 쿠키 세션을 제안. 세션 기간·재발송 간격·실패 잠금 횟수는 고정하지 않음 |
+| 학생 재로그인·세션 | 이메일 OTP 학생 로그인 구현. 기본 서버 유휴 만료·쿠키 유지 30일(SESSION_TIMEOUT으로 변경 가능). 기존 이메일 인증 제한 유지: 재발송 1분, 하루 10회(한국 시간 자정 초기화), 실패 5회 시 10분 제한. 학생 신규/기존 분기 안내는 프런트와 연동 시 정리 |
 | 정지 계정의 정산 | 새 동승 차단과 기존 송금·환급 확인용 제한 접근 유지 제안. 예외 권한 확정 필요 |
-| 성별 코드·수정 | 승인된 선택지를 profile-options로 공급. 기존 성별 수정은 제공하지 않음 |
+| 성별 코드·수정 | 가입은 v0.3의 FEMALE/여성, MALE/남성 사용. 동성 매칭은 켜기·끄기 모두 허용하도록 확인됨(기본 true). v0.3의 성별 수정은 후속 프로필 API에서 반영할 항목 |
 | 동승 시간·결과 마감 | 30분 슬롯은 확정. 운영 시간과 결과 안내 산정식은 서버 설정으로 확정 필요. v0.2의 시간 범위·수식을 자동 적용하지 않음 |
-| 팟 확정·채팅 오픈 | 최초 개인 확정인지 전원 확정인지, 확정 마감 뒤 처리인지 별도 확정 |
+| 팟 확정·채팅 오픈 | v0.4 기준 첫 확정 시 내부 방 생성, 확정한 멤버부터 입장. 대표는 계좌 등록 후 입장. 마감 미확정 제외·해산은 기존 팟 API에서 처리 |
 | 취소 경계·기수령금 | 원본의 출발 15분 전 취소 적용. 정확한 경계 포함 여부는 제안. 선송금 시작 이후 취소·해산·대표 교체는 정책 확정 전 자동 처리 보류 |
 | 출발 +5분 미입금 제외 | 원본 규칙 유지. 제외 후 1명만 남거나 이미 보낸 돈이 있는 경우 재분담·환급 방식 확정 필요 |
 | 미탑승·음수 환급 | 자동 전액 환급·추가 송금·다수결 정책을 만들지 않음. PREVIEW는 확정 불가 사유, FINALIZE는 검토 상태로 분기 |
 | 수동 송금 확인 순서 | 수취자가 송금자보다 먼저 입금을 확인하는 경우 허용 제안. 실제 은행 검증과 구분 |
-| 채팅·계좌·영수증 삭제 | 일반 방 종료 시각, 환급 미완료 방 유지, 신고 7일 기산점/복수 신고, 영수증 보관 기간 확정 필요. 계좌 삭제 뒤 신규 송금은 막고 기존 수령 확인은 별도 처리 |
+| 채팅·계좌·영수증 삭제 | v0.4 기준 max(출발+1시간, 대표 정산 확정) 종료 및 계좌 삭제. 정산 미확정이면 연장. 신고 증거는 기획 질문 v3 기준 신고 시점까지의 방 전체 대화 사본을 신고별 접수 +7일에 정리하고 차단 유지. 일반 메시지 물리 삭제·영수증 보관 기간은 별도 정책 |
 | 계좌 재사용 | 장기 서버 보관 API 없음. ‘다음에도 사용’의 기기 보관·동의 범위 확정 필요 |
 | 미정산 제한·제재 | 신규 등록 제한 대상/기간, 7일 지연 정지의 기산점·해제 조건 확정 필요 |
 | 최소 표본·AI 순위 | ‘등록 5건’의 정확한 단위 확인 필요. 현재 임시 제안은 중복 제거 귀가 기준. 원본의 추정 수요 순위를 사용하고 복합 점수는 보류 |
 | 관계자 범위 | 초기 제안은 본인 대학의 집계와 본인이 생성한 리포트. 타 대학 집계·팀 리포트 공유 권한 확정 필요 |
-| 파일·화면 제한 | 이미지 종류/5MiB, 메시지 길이, 리포트 한 페이지의 후보 수용량은 구현 제안. 실제 템플릿 기준으로 확정 |
+| 파일·화면 제한 | 채팅 메시지는 v0.4의 최대 200자 적용. 이미지 종류/5MiB와 리포트 한 페이지의 후보 수용량은 구현 제안이며 실제 템플릿 기준으로 확정 |
 | 외부 자료 | 버스 경로·요금·추정 모델·원천 해상도·갱신 주기 검증 필요. 실제 연동 완료를 전제하지 않음 |
 
 ## 8. 구현·검토 체크

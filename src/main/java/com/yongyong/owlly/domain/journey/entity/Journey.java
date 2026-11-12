@@ -66,4 +66,34 @@ public class Journey extends BaseTimeEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "outcome_source", length = 30)
     private OutcomeSource outcomeSource;
+
+    /**
+     * 귀가의 출발 거점·하차 동·예정 시각을 이번 동승 신청의 값으로 바꾼다(귀가는 같고 신청만 새로 생기는 재등록).
+     * 예) 23:30 매칭에 실패해 00:00 으로 다시 등록하면 귀가의 예정 시각이 00:00 이 된다.
+     */
+    public void updateIntent(Long pickupPointId, Long destinationDongId, Instant intendedDepartureAt) {
+        this.pickupPointId = pickupPointId;
+        this.destinationDongId = destinationDongId;
+        this.intendedDepartureAt = intendedDepartureAt;
+    }
+
+    /**
+     * 학생이 막차·혼자 택시를 골랐다고 기록한다(→ BUS_SELECTED / SOLO_SELECTED, 출처 USER_CHOICE).
+     * 예) 매칭에 실패한 학생이 "막차로 갈게요"를 눌렀을 때.
+     */
+    public void chooseByUser(JourneyChoiceMode mode, Instant now) {
+        this.outcome = mode.outcome();
+        this.outcomeAt = now;
+        this.outcomeSource = OutcomeSource.USER_CHOICE;
+    }
+
+    /**
+     * 동승으로 귀가했다고 기록한다(→ POOL_BOARDED, 출처 BOARDING_CONFIRMATION).
+     * 예) 채팅방에서 "탔어요"를 눌렀을 때. 학생이 귀가 선택 화면에서 직접 고를 수는 없다(api.md API-17).
+     */
+    public void markPoolBoarded(Instant now) {
+        this.outcome = JourneyOutcome.POOL_BOARDED;
+        this.outcomeAt = now;
+        this.outcomeSource = OutcomeSource.BOARDING_CONFIRMATION;
+    }
 }
