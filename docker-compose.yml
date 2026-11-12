@@ -17,5 +17,29 @@ services:
       timeout: 5s
       retries: 5
 
+  server:
+    # 운영 배포에서는 CI가 GHCR 이미지를 pull 한다. 로컬에서 이미지가 없으면 아래 build 로 생성.
+    image: ${SERVER_IMAGE:-ghcr.io/owlly-team/owlly-server:latest}
+    build: .
+    container_name: owlly-server
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      # 컨테이너 네트워크에서 DB 는 서비스명으로 접근한다(.env 의 DB_HOST 를 덮어씀).
+      DB_HOST: postgres
+      DB_PORT: 5432
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8080; echo -e \"GET /actuator/health HTTP/1.0\\r\\n\\r\\n\" >&3; grep -q UP <&3'"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
 volumes:
   owlly-postgres-data:
