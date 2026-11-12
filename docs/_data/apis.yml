@@ -343,22 +343,29 @@ sections:
         method: GET
         path: /parties/{id}/room
         desc: 팟 채팅방·확인 코드 조회
-        status: 시작 전
-        auth: 해당 팟 참여자 (PARTY_MEMBER)
+        status: 완료
+        auth: 확정된 팟 참여자 (PARTY_MEMBER) · 대표는 PREPAY_RECEIVE 계좌 등록 후 입장
         success: "200 · data = Room"
-        req: 없음
-        errors: ["409 ROOM_NOT_READY", "410 ROOM_ACCESS_EXPIRED"]
+        req: |
+          본문 없음 · 로그인 세션 쿠키 필요
+          첫 개인 확정 시 방 생성, 전원 확정을 기다리지 않음
+          대표 계좌 등록용 roomId는 API-22/23 응답 사용
+          출발 +1시간과 대표 정산 확정 중 늦은 시각에 종료, 정산 미확정이면 연장
+          종료 후 조회 불가. deleteAfter=null (신고 보존·물리 삭제는 별도 연결)
+        errors: ["401 UNAUTHENTICATED", "403 FORBIDDEN", "403 ACCOUNT_SUSPENDED", "404 RESOURCE_NOT_FOUND", "409 ROOM_NOT_READY", "410 ROOM_ACCESS_EXPIRED"]
       - id: API-28
         method: GET
         path: /rooms/{id}/messages
         desc: 채팅 이력·새 메시지 조회
-        status: 시작 전
-        auth: 해당 방 참여자 (ROOM_MEMBER)
+        status: 완료
+        auth: 확정된 방 참여자 (ROOM_MEMBER) · 대표는 계좌 등록 후
         success: "200 · data = Message[]"
         req: |
           Query 파라미터
           afterId (string, 선택), beforeId (string, 선택) — 동시 입력 금지
           limit (integer, 선택, 1~100, 기본 50)
+          최초/과거 조회는 ID 내림차순, afterId 신규 조회는 오름차순
+          빈 결과의 latestId=null이면 기존 신규 조회 기준 ID 유지
         res: |
           {
             "data": [
@@ -373,13 +380,13 @@ sections:
             ],
             "meta": { "nextBeforeId": null, "latestId": "701", "hasMore": false }
           }
-        errors: ["410 ROOM_ACCESS_EXPIRED"]
+        errors: ["401 UNAUTHENTICATED", "403 FORBIDDEN", "403 ACCOUNT_SUSPENDED", "404 RESOURCE_NOT_FOUND", "409 ROOM_NOT_READY", "410 ROOM_ACCESS_EXPIRED", "422 VALIDATION_ERROR"]
       - id: API-29
         method: POST
         path: /rooms/{id}/messages
         desc: 채팅 메시지 전송
-        status: 시작 전
-        auth: 해당 방 참여자 (ROOM_MEMBER) · Idempotency-Key 필수
+        status: 완료
+        auth: 확정된 방 참여자 (ROOM_MEMBER) · 대표는 계좌 등록 후 · Idempotency-Key와 X-CSRF-Token 필수
         success: "201 · data = Message"
         req: |
           application/json · MessageCreate
@@ -387,7 +394,10 @@ sections:
             "clientMessageId": "0b18e222-668f-4b29-a013-6f1169e7a003",
             "text": "집결 장소에 도착했어요."
           }
-        errors: ["409 ROOM_CLOSED", "422 MESSAGE_REJECTED", "409 IDEMPOTENCY_CONFLICT"]
+          text: JSON 문자열, 1~200자(Java 문자열 길이), 공백만 입력 불가
+          번호·링크·계좌를 '가려진 번호'로 치환 후 저장·응답
+          동일 전송 재시도는 키·clientMessageId·본문 유지
+        errors: ["401 UNAUTHENTICATED", "403 FORBIDDEN", "403 ACCOUNT_SUSPENDED", "404 RESOURCE_NOT_FOUND", "409 ROOM_NOT_READY", "409 ROOM_CLOSED", "422 VALIDATION_ERROR", "422 MESSAGE_REJECTED", "409 IDEMPOTENCY_CONFLICT", "503 POLICY_NOT_CONFIGURED"]
       - id: API-30
         method: POST
         path: /rooms/{id}/reports
