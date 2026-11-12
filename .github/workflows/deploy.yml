@@ -16,6 +16,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Write .env from secret
+        run: printf '%s' "$ENV_FILE" > .env
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+
+      - name: Load .env into job env
+        run: grep -E '^[A-Za-z_][A-Za-z0-9_]*=' .env >> "$GITHUB_ENV"
+
+      - name: Start Postgres from .env
+        run: |
+          docker run -d --name postgres \
+            -e POSTGRES_DB="$DB_NAME" \
+            -e POSTGRES_USER="$DB_USERNAME" \
+            -e POSTGRES_PASSWORD="$DB_PASSWORD" \
+            -p "${DB_PORT}:5432" \
+            postgres:16
+          for i in $(seq 1 30); do
+            docker exec postgres pg_isready -U "$DB_USERNAME" -d "$DB_NAME" && exit 0
+            sleep 2
+          done
+          echo "Postgres did not become ready" >&2; exit 1
+
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
