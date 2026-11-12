@@ -19,6 +19,9 @@ import com.yongyong.owlly.domain.settlement.repository.SettlementRepository;
 import com.yongyong.owlly.domain.settlement.repository.TransferRepository;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,6 +50,7 @@ public class SettlementEstimateService {
     private final SettlementRepository settlements;
     private final SettlementItemRepository settlementItems;
     private final TransferRepository transfers;
+    private final FareShareCalculator fareShareCalculator;
 
     /**
      * 팟의 예상 정산을 만들고 멤버별 예상 금액을 돌려준다.
@@ -62,9 +66,7 @@ public class SettlementEstimateService {
     public List<MemberEstimate> createEstimate(Long partyId, int estimatedTotalWon) {
         var existing = settlements.findByPartyId(partyId);
         if (existing.isPresent()) {
-            return settlementItems.findBySettlementIdOrderByIdAsc(existing.get().getId()).stream()
-                    .map(item -> new MemberEstimate(item.getMemberId(), item.getEstimatedShareWon(), item.getPrepayDueWon()))
-                    .toList();
+            return toEstimates(existing.get().getId());
         }
 
         RideParty party = rideParties.findById(partyId)
@@ -77,7 +79,7 @@ public class SettlementEstimateService {
 
         int lastIndex = stops.size() - 1;
         Long representativeMemberId = stops.get(lastIndex).getMemberId(); // 막차 = 대표
-        int[] shares = computeShares(stops, estimatedTotalWon);
+        int[] shares = fareShareCalculator.shares(stops, estimatedTotalWon);
 
         Settlement settlement = settlements.save(Settlement.builder()
                 .partyId(partyId)
@@ -117,41 +119,96 @@ public class SettlementEstimateService {
     }
 
     /**
-     * 거리 비례(구간별 인원 분할)로 멤버별 분담액을 계산한다. 합계는 전체 요금과 정확히 일치시킨다.
+     * 멤버 이탈로 경로가 바뀐 뒤 남은 사람의 예상 정산을 다시 계산한다 (API-24 이탈 처리에서 호출).
      *
-     * <p>하차 순서대로 stops[0..n-1]. 구간 k(0-based)는 stops[k] 가 내리는 구간이고, 그 구간엔 아직 내리지 않은
-     * (n-k)명이 타고 있다. 구간 요금은 거리 비례(total × d_k / D)이고 그 인원수로 균등 분할한다.
-     * stops[j] 는 구간 0..j 를 타므로 그 합이 분담액. 반올림 잔차는 대표(막차)가 흡수한다.
+     * <p>호출 전제: 이탈 처리(PartyService)가 빠진 사람을 지운 새 하차 순서를 새 route_version 으로 이미
+     * 저장하고 팟의 경로 버전을 올려 둔 상태다. 같은 트랜잭션에서 호출한다.
+     *
+     * <p>동작:
+     * <ul>
+     *   <li>남은 하차 순서로 분담액을 다시 계산하고 settlement·settlement_items 를 갱신한다.</li>
+     *   <li>빠진 멤버의 항목은 지우고, 아직 안 보낸 PENDING 선송금은 취소한다.</li>
+     *   <li>이미 보냈거나 받은 선송금(SENT/RECEIVED)은 금액을 바꾸지 않는다(기획: 기수령 선송금 보존).</li>
+     * </ul>
+     *
+     * @param partyId           이탈이 일어난 팟
+     * @param estimatedTotalWon 다시 계산한 전체 예상 요금(새 경로 기준)
+     * @return 남은 멤버별 예상 분담·선송금. 정산이 없거나 하차 순서가 없으면 빈 목록
      */
-    private int[] computeShares(List<PartyStop> stops, int total) {
-        int n = stops.size();
-        int[] shares = new int[n];
-
-        long totalDistance = 0;
-        for (PartyStop stop : stops) {
-            totalDistance += stop.getSegmentDistanceM();
+    @Transactional
+    public List<MemberEstimate> reEstimate(Long partyId, int estimatedTotalWon) {
+        Settlement settlement = settlements.findByPartyId(partyId).orElse(null);
+        if (settlement == null || settlement.getFinalizedAt() != null) {
+            return settlement == null ? List.of() : toEstimates(settlement.getId());
         }
-        if (totalDistance <= 0) { // 거리 정보가 없으면 균등 분할로 대체
-            int base = total / n;
-            for (int i = 0; i < n; i++) {
-                shares[i] = base;
-            }
-            shares[n - 1] += total - base * n;
-            return shares;
+        RideParty party = rideParties.findById(partyId)
+                .orElseThrow(() -> new OwllyException(ErrorCode.RESOURCE_NOT_FOUND));
+        int routeVersion = party.getRouteVersion();
+        List<PartyStop> stops = partyStops.findByPartyIdAndRouteVersionOrderByStopOrderAsc(partyId, routeVersion);
+        if (stops.isEmpty()) {
+            return toEstimates(settlement.getId());
         }
 
-        long rounded = 0;
-        for (int j = 0; j < n; j++) {
-            double share = 0;
-            for (int k = 0; k <= j; k++) {
-                double segmentFare = (double) total * stops.get(k).getSegmentDistanceM() / totalDistance;
-                share += segmentFare / (n - k); // 구간 k 에 탄 인원 = n - k
+        Long representativeMemberId = stops.get(stops.size() - 1).getMemberId();
+        int[] shares = fareShareCalculator.shares(stops, estimatedTotalWon);
+
+        List<SettlementItem> currentItems = settlementItems.findBySettlementIdOrderByIdAsc(settlement.getId());
+        Map<Long, SettlementItem> itemByMemberId = currentItems.stream()
+                .collect(Collectors.toMap(SettlementItem::getMemberId, item -> item));
+        Map<Long, List<Transfer>> transfersByItemId = transfers
+                .findBySettlementItemIdInOrderByIdAsc(currentItems.stream().map(SettlementItem::getId).toList())
+                .stream().collect(Collectors.groupingBy(Transfer::getSettlementItemId));
+        Set<Long> remainingMemberIds = stops.stream().map(PartyStop::getMemberId).collect(Collectors.toSet());
+
+        // 1) 빠진 멤버 정리: 새 하차 순서에 없는 항목은 PENDING 선송금을 취소하고 항목을 지운다.
+        for (SettlementItem item : currentItems) {
+            if (!remainingMemberIds.contains(item.getMemberId())) {
+                transfersByItemId.getOrDefault(item.getId(), List.of()).forEach(transfer -> {
+                    if (transfer.isPending()) transfer.cancel();
+                });
+                settlementItems.delete(item);
             }
-            shares[j] = (int) Math.round(share);
-            rounded += shares[j];
         }
-        shares[n - 1] += (int) (total - rounded); // 잔차는 대표가 흡수 → 합계 정확히 일치
-        return shares;
+
+        // 2) 남은 멤버 재계산. 이미 보낸/받은 선송금은 그대로 두고, PENDING 선송금만 새 금액으로 맞춘다.
+        settlement.reEstimate(routeVersion, estimatedTotalWon);
+        List<MemberEstimate> estimates = new ArrayList<>(stops.size());
+        for (int i = 0; i < stops.size(); i++) {
+            Long memberId = stops.get(i).getMemberId();
+            SettlementItem item = itemByMemberId.get(memberId);
+            int share = shares[i];
+            List<Transfer> memberTransfers = transfersByItemId.getOrDefault(item.getId(), List.of());
+            boolean prepaySettled = memberTransfers.stream().anyMatch(this::isSettledPrepay);
+
+            int prepay;
+            if (memberId.equals(representativeMemberId)) {
+                prepay = 0;
+            } else if (prepaySettled) {
+                prepay = item.getPrepayDueWon(); // 기수령 선송금 보존
+            } else {
+                prepay = ceilTo100(share * PREPAY_BUFFER);
+                int updated = prepay;
+                memberTransfers.stream()
+                        .filter(t -> t.getKind() == TransferKind.PREPAY && t.isPending())
+                        .forEach(t -> t.changeAmount(updated));
+            }
+            item.reEstimate(share, prepay);
+            estimates.add(new MemberEstimate(memberId, share, prepay));
+        }
+        return estimates;
+    }
+
+    /** 이미 보냈거나 받은 선송금인지. 이런 송금은 재계산으로 바꾸지 않는다. */
+    private boolean isSettledPrepay(Transfer transfer) {
+        return transfer.getKind() == TransferKind.PREPAY
+                && (transfer.getStatus() == TransferStatus.SENT || transfer.getStatus() == TransferStatus.RECEIVED);
+    }
+
+    /** 정산의 현재 개인 항목을 예상 금액 목록으로 변환한다. */
+    private List<MemberEstimate> toEstimates(Long settlementId) {
+        return settlementItems.findBySettlementIdOrderByIdAsc(settlementId).stream()
+                .map(item -> new MemberEstimate(item.getMemberId(), item.getEstimatedShareWon(), item.getPrepayDueWon()))
+                .toList();
     }
 
     /** 100원 단위 올림. 선송금은 송금 편의를 위해 100원 단위로 받는다. */

@@ -546,7 +546,7 @@ sections:
         method: POST
         path: /parties/{id}/settlement/preview
         desc: 실제 요금 분담·환급 미리보기
-        status: 시작 전
+        status: 완료
         auth: 해당 팟 대표 (REPRESENTATIVE)
         success: "200 · data = FarePreview (저장 안 함)"
         req: |
@@ -555,7 +555,7 @@ sections:
             "actualTotalWon": 30000,
             "routeVersion": 2
           }
-        errors: ["422 FARE_LIMIT_EXCEEDED", "409 ROUTE_VERSION_CONFLICT", "409 INVALID_ROUTE_DISTANCE", "409 SETTLEMENT_FINALIZED"]
+        errors: ["403 FORBIDDEN", "422 FARE_LIMIT_EXCEEDED", "409 ROUTE_VERSION_CONFLICT", "409 INVALID_ROUTE_DISTANCE", "409 SETTLEMENT_FINALIZED"]
       - id: API-38
         method: POST
         path: /parties/{id}/settlement/finalize

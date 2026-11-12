@@ -890,7 +890,7 @@
 }
 ```
 
-**처리·검증:** 저장하지 않는 계산. 원본 상한 actualTotalWon <= floor(estimatedTotalWon*1.2). 예정 경로 구간거리/구간 탑승 인원으로 나누고 원 단위 나머지 배분. 대표 환급 0, 일반 멤버 음수 환급/미탑승 예외는 canFinalize=false와 사유 반환.
+**처리·검증:** 저장하지 않는 계산. 원본 상한 actualTotalWon <= floor(estimatedTotalWon*1.2). 예정 경로 구간거리/구간 탑승 인원으로 나누고 원 단위 나머지 배분. 차액 = 선송금 − 확정 분담(양수 환급 대표→멤버, 음수 추가 납부 멤버→대표). 대표 환급 0. 음수 차액(추가 납부)은 디자인(S-06w)에 따라 허용하여 확정을 막지 않는다(canFinalize=true). blockingReasons 는 미탑승 등 후속 정책용으로 지금은 빈 목록.
 
 **업무 오류:** `422 FARE_LIMIT_EXCEEDED`, `409 ROUTE_VERSION_CONFLICT`, `409 INVALID_ROUTE_DISTANCE`, `409 SETTLEMENT_FINALIZED`
 
@@ -1572,7 +1572,7 @@
 | --- | --- | --- | --- |
 | `memberId` | string | 예 | 멤버; 형식: `^[1-9][0-9]*$` |
 | `actualShareWon` | integer | 예 | 계산 부담; 최소 0 |
-| `refundDueWon` | integer | 예 | 대표 0; 음수는 미확정 정책 필요 |
+| `refundDueWon` | integer | 예 | 선송금 − 확정. 양수=환급(대표→멤버), 음수=추가 납부(멤버→대표); 대표 0 |
 
 ### FarePreview
 

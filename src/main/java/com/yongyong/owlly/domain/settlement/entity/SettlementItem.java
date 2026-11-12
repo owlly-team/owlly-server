@@ -58,4 +58,13 @@ public class SettlementItem extends BaseTimeEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private SettlementItemStatus status;
+
+    /**
+     * 멤버 이탈로 경로가 바뀌어 예상 분담·선송금을 다시 계산할 때 쓴다(API-24).
+     * 이미 선송금을 받은 멤버의 금액은 바꾸지 않도록 서비스에서 먼저 거른다.
+     */
+    public void reEstimate(int estimatedShareWon, int prepayDueWon) {
+        this.estimatedShareWon = estimatedShareWon;
+        this.prepayDueWon = prepayDueWon;
+    }
 }
