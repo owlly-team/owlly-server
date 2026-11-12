@@ -25,6 +25,7 @@ import com.yongyong.owlly.domain.party.repository.RidePartyRepository;
 import com.yongyong.owlly.domain.party.service.PartyGrouper.UserPair;
 import com.yongyong.owlly.domain.region.entity.PickupPoint;
 import com.yongyong.owlly.domain.region.repository.PickupPointRepository;
+import com.yongyong.owlly.domain.region.service.OutOfCityDetector;
 import com.yongyong.owlly.domain.settlement.dto.MemberEstimate;
 import com.yongyong.owlly.domain.settlement.service.SettlementEstimateService;
 import java.security.SecureRandom;
@@ -79,6 +80,7 @@ public class MatchingService {
     private final PartyMemberRepository partyMemberRepository;
     private final PartyStopRepository partyStopRepository;
     private final TaxiFareService taxiFareService;
+    private final OutOfCityDetector outOfCityDetector;
     private final SettlementEstimateService settlementEstimateService;
     private final NotificationService notificationService;
     private final TextCryptor textCryptor;
@@ -164,8 +166,11 @@ public class MatchingService {
             dropoffByMemberId.put(member.getId(), encryptedValueReader.readDropoff(requestById.get(member.getRequestId())));
         }
         List<PartyMember> dropOrder = orderByNearestDropoff(origin, savedMembers, dropoffByMemberId);
+        // 하차 지점 중 하나라도 거점과 다른 시·군이면 시계 외 할증을 전체 요금에 붙인다(혼자 택시 비교와 같은 규칙)
+        boolean outOfCity = outOfCityDetector.isOutOfCity(pickupPoint.getAreaId(),
+                dropOrder.stream().map(m -> requestById.get(m.getRequestId()).getDistrictId()).toList());
         RouteEstimate route = taxiFareService.estimateRoute(
-                origin, dropOrder.stream().map(m -> dropoffByMemberId.get(m.getId())).toList(), key.departureAt());
+                origin, dropOrder.stream().map(m -> dropoffByMemberId.get(m.getId())).toList(), key.departureAt(), outOfCity);
 
         List<PartyStop> stops = new ArrayList<>();
         for (int i = 0; i < dropOrder.size(); i++) {

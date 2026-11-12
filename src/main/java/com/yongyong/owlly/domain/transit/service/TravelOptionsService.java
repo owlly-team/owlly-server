@@ -8,11 +8,11 @@ import com.yongyong.owlly.domain.fare.service.TaxiFareService;
 import com.yongyong.owlly.domain.journey.dto.MatchingSlot;
 import com.yongyong.owlly.domain.journey.service.MatchingSlotService;
 import com.yongyong.owlly.domain.region.entity.AdministrativeArea;
-import com.yongyong.owlly.domain.region.entity.AreaLevel;
 import com.yongyong.owlly.domain.region.entity.PickupPoint;
 import com.yongyong.owlly.domain.region.repository.AdministrativeAreaRepository;
 import com.yongyong.owlly.domain.region.repository.PickupPointRepository;
 import com.yongyong.owlly.domain.region.service.DropoffLocationService;
+import com.yongyong.owlly.domain.region.service.OutOfCityDetector;
 import com.yongyong.owlly.domain.transit.client.GbisBusClient.DayType;
 import com.yongyong.owlly.domain.transit.client.GbisBusClient.GbisException;
 import com.yongyong.owlly.domain.transit.dto.TransitLeg;
@@ -64,6 +64,7 @@ public class TravelOptionsService {
     private final StudentProfileRepository studentProfileRepository;
     private final PickupPointRepository pickupPointRepository;
     private final AdministrativeAreaRepository administrativeAreaRepository;
+    private final OutOfCityDetector outOfCityDetector;
     private final DropoffLocationService dropoffLocations;
     private final TaxiFareService taxiFareService;
     private final MatchingSlotService matchingSlotService;
@@ -103,7 +104,7 @@ public class TravelOptionsService {
                 transitPlanCatalog.find(pickupPoint.getId(), district.getOfficialCode()),
                 walkingStart, dropoff, request.departureAt(), now, warnings);
 
-        boolean outOfCity = isOutOfCity(pickupPoint, district);
+        boolean outOfCity = outOfCityDetector.isOutOfCity(pickupPoint.getAreaId(), List.of(district.getId()));
         RouteEstimate taxi = taxiFareService.estimateRoute(origin, List.of(dropoff), now, outOfCity);
         if (outOfCity) {
             warnings.add("시·군을 넘어가서 시계 외 할증을 반영했어요");
@@ -138,32 +139,6 @@ public class TravelOptionsService {
                 district.getName(),
                 now,
                 List.copyOf(warnings));
-    }
-
-    /**
-     * 거점과 하차 지점이 서로 다른 시·군인지(시계 외 할증 대상). 두 곳의 시·군을 행정구역 계층에서 찾아 비교한다.
-     * 거점의 행정구역을 알 수 없으면 할증을 붙이지 않는다.
-     */
-    private boolean isOutOfCity(PickupPoint pickupPoint, AdministrativeArea dropoffDistrict) {
-        AdministrativeArea pickupCity = cityOf(pickupPoint.getAreaId());
-        AdministrativeArea dropoffCity = cityOf(dropoffDistrict.getId());
-        return pickupCity != null && dropoffCity != null && !pickupCity.getId().equals(dropoffCity.getId());
-    }
-
-    /** 이 행정구역이 속한 시·군(CITY). 위로 거슬러 올라가며 찾고, 못 찾으면 null. */
-    private AdministrativeArea cityOf(Long areaId) {
-        Long currentId = areaId;
-        for (int hops = 0; currentId != null && hops < 4; hops++) {
-            Optional<AdministrativeArea> found = administrativeAreaRepository.findById(currentId);
-            if (found.isEmpty()) {
-                return null;
-            }
-            if (found.get().getLevel() == AreaLevel.CITY) {
-                return found.get();
-            }
-            currentId = found.get().getParentId();
-        }
-        return null;
     }
 
     /** 지금 등록할 수 있는 가장 가까운 동승 시간대(오늘, 없으면 내일). */

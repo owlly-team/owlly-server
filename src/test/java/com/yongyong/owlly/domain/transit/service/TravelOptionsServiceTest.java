@@ -22,6 +22,7 @@ import com.yongyong.owlly.domain.region.entity.PickupPoint;
 import com.yongyong.owlly.domain.region.repository.AdministrativeAreaRepository;
 import com.yongyong.owlly.domain.region.repository.PickupPointRepository;
 import com.yongyong.owlly.domain.region.service.DropoffLocationService;
+import com.yongyong.owlly.domain.region.service.OutOfCityDetector;
 import com.yongyong.owlly.domain.transit.client.GbisBusClient.DayType;
 import com.yongyong.owlly.domain.transit.client.GbisBusClient.GbisException;
 import com.yongyong.owlly.domain.transit.dto.TransitOption;
@@ -60,7 +61,7 @@ class TravelOptionsServiceTest {
     private final MatchingSlotService matchingSlotService = mock(MatchingSlotService.class);
     private final TransitTimetableService timetable = mock(TransitTimetableService.class);
     private final TravelOptionsService service = new TravelOptionsService(userRepository, profileRepository,
-            pickupPointRepository, areaRepository, dropoffLocations, taxiFareService, matchingSlotService,
+            pickupPointRepository, areaRepository, new OutOfCityDetector(areaRepository), dropoffLocations, taxiFareService, matchingSlotService,
             new TransitPlanCatalog(PICKUP), timetable);
 
     private static Instant kst(String dateTime) {
