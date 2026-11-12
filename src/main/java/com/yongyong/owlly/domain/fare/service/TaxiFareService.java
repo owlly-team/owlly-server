@@ -11,6 +11,7 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -53,11 +54,19 @@ public class TaxiFareService {
 
     private final KakaoMobilityClient kakaoMobilityClient;
     private final double nightSurchargeRate;
+    private final double outOfCitySurchargeRate;
 
+    @Autowired
     public TaxiFareService(KakaoMobilityClient kakaoMobilityClient,
-                           @Value("${owlly.fare.night-surcharge-rate:0.3}") double nightSurchargeRate) {
+                           @Value("${owlly.fare.night-surcharge-rate:0.3}") double nightSurchargeRate,
+                           @Value("${owlly.fare.out-of-city-surcharge-rate:0.2}") double outOfCitySurchargeRate) {
         this.kakaoMobilityClient = kakaoMobilityClient;
         this.nightSurchargeRate = nightSurchargeRate;
+        this.outOfCitySurchargeRate = outOfCitySurchargeRate;
+    }
+
+    TaxiFareService(KakaoMobilityClient kakaoMobilityClient, double nightSurchargeRate) {
+        this(kakaoMobilityClient, nightSurchargeRate, 0.2);
     }
 
     /**
@@ -68,30 +77,42 @@ public class TaxiFareService {
      * @param departureAt 출발 시각. 심야할증 판단에 쓴다
      */
     public RouteEstimate estimateRoute(GeoPoint origin, List<GeoPoint> stops, Instant departureAt) {
+        return estimateRoute(origin, stops, departureAt, false);
+    }
+
+    /**
+     * 시계 외 할증을 고려한 예상 거리·요금. 거점과 하차 지점이 서로 다른 시·군이면 outOfCity 를 true 로 준다.
+     * 시계 외 할증은 경계 위치를 보지 않고 전체 요금에 더한다(어림). 심야할증과 같이 걸리면 두 할증률을 더해서 곱한다.
+     *
+     * @param outOfCity 시·군 경계를 넘는 경로인지(거점과 하차 지점의 시·군이 다름)
+     */
+    public RouteEstimate estimateRoute(GeoPoint origin, List<GeoPoint> stops, Instant departureAt, boolean outOfCity) {
         try {
             KakaoRoute route = kakaoMobilityClient.findRoute(origin, stops);
-            return fromKakao(route, departureAt);
+            return fromKakao(route, departureAt, outOfCity);
         } catch (KakaoRouteException e) {
             log.warn("카카오 길찾기를 쓸 수 없어 요금표 공식으로 계산합니다. reason={}", e.getMessage());
-            return fromFareTable(origin, stops, departureAt);
+            return fromFareTable(origin, stops, departureAt, outOfCity);
         }
     }
 
-    private RouteEstimate fromKakao(KakaoRoute route, Instant departureAt) {
+    private RouteEstimate fromKakao(KakaoRoute route, Instant departureAt, boolean outOfCity) {
         int taxiFare = route.taxiFareWon();
+        boolean night = isNight(departureAt);
         String source = SOURCE_KAKAO;
-        if (isNight(departureAt)) {
-            taxiFare = roundUpToUnit(taxiFare * (1 + nightSurchargeRate));
-            source = SOURCE_KAKAO_NIGHT_ADJUSTED;
+        if (night || outOfCity) {
+            taxiFare = roundUpToUnit(taxiFare * (1 + surchargeRate(night, outOfCity)));
+            source = SOURCE_KAKAO + (night ? "+NIGHT_RATE" : "") + (outOfCity ? "+OUT_OF_CITY_RATE" : "");
         }
         return new RouteEstimate(
                 List.copyOf(route.sectionDistancesM()),
                 route.distanceM(),
                 taxiFare + route.tollWon(),
-                source);
+                source,
+                route.durationSec() > 0 ? route.durationSec() : null);
     }
 
-    private RouteEstimate fromFareTable(GeoPoint origin, List<GeoPoint> stops, Instant departureAt) {
+    private RouteEstimate fromFareTable(GeoPoint origin, List<GeoPoint> stops, Instant departureAt, boolean outOfCity) {
         List<Integer> segments = new ArrayList<>();
         GeoPoint from = origin;
         for (GeoPoint to : stops) {
@@ -99,20 +120,31 @@ public class TaxiFareService {
             from = to;
         }
         int total = segments.stream().mapToInt(Integer::intValue).sum();
-        return new RouteEstimate(segments, total, fareByTable(total, departureAt), SOURCE_FARE_TABLE);
+        return new RouteEstimate(segments, total, fareByTable(total, departureAt, outOfCity), SOURCE_FARE_TABLE);
     }
 
     /** 용인시 요금표로 계산한 요금. 심야면 할증률을 곱한다. */
     int fareByTable(int distanceM, Instant departureAt) {
+        return fareByTable(distanceM, departureAt, false);
+    }
+
+    /** 요금표 요금. 심야나 시계 외이면 해당 할증률을 더한 비율로 곱한다. */
+    int fareByTable(int distanceM, Instant departureAt, boolean outOfCity) {
         int fare = BASE_FARE_WON;
         if (distanceM > BASE_DISTANCE_M) {
             int units = (distanceM - BASE_DISTANCE_M + UNIT_DISTANCE_M - 1) / UNIT_DISTANCE_M;
             fare += units * UNIT_FARE_WON;
         }
-        if (isNight(departureAt)) {
-            fare = roundUpToUnit(fare * (1 + nightSurchargeRate));
+        boolean night = isNight(departureAt);
+        if (night || outOfCity) {
+            fare = roundUpToUnit(fare * (1 + surchargeRate(night, outOfCity)));
         }
         return fare;
+    }
+
+    /** 적용할 할증률: 심야 할증률과 시계 외 할증률을 해당하는 것만 더한다. */
+    private double surchargeRate(boolean night, boolean outOfCity) {
+        return (night ? nightSurchargeRate : 0) + (outOfCity ? outOfCitySurchargeRate : 0);
     }
 
     /** 심야할증 시간(23:00 ~ 다음 날 04:00, 한국 시간)인지. */

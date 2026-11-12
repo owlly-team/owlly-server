@@ -91,7 +91,10 @@ TransitLeg:
       "fromName": "string",
       "toName": "string",
       "departureAt": "datetime",
-      "arrivalAt": "datetime"
+      "arrivalAt": "datetime",
+      "distanceM": "integer | null",
+      "stopCount": "integer | null",
+      "lastBus": "boolean"
     }
 TransitOption:
   skeleton: |
@@ -100,6 +103,7 @@ TransitOption:
       "lastLeaveAt": "datetime | null",
       "arrivalAt": "datetime | null",
       "estimatedCostWon": "integer | null",
+      "totalDurationMin": "integer | null",
       "legs": "TransitLeg[]",
       "sourceLabel": "string",
       "asOf": "datetime"
@@ -109,10 +113,15 @@ TravelOptions:
     {
       "transit": "TransitOption",
       "soloTaxiEstimatedWon": "integer | null",
-      "poolEstimatedShareWon": "integer | null",
+      "soloTaxiDistanceM": "integer | null",
+      "soloTaxiDurationMin": "integer | null",
       "estimatedArrivalAt": "datetime | null",
+      "poolEstimatedShareWon": "integer | null",
+      "nearestPoolSlot": "MatchingSlot | null",
       "destinationDongId": "string",
+      "destinationDongName": "string",
       "districtId": "string",
+      "districtName": "string",
       "asOf": "datetime",
       "warnings": "string[]"
     }

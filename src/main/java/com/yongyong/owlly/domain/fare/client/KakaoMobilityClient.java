@@ -17,7 +17,7 @@ import org.springframework.web.client.RestClientException;
  *
  * <p>GET https://apis-navi.kakaomobility.com/v1/directions (실시간 길찾기).
  * 경유지마다 구간(sections)이 나뉘어 와서 하차 순서별 구간 거리를 얻을 수 있다.
- * 택시 요금(fare.taxi)의 심야할증은 "호출한 시각" 기준으로 카카오가 넣는다.
+ * 택시 요금(fare.taxi)에는 심야할증이 들어 있지 않다(실측). 출발 시각이 심야이면 서비스에서 할증률을 곱한다.
  */
 @Component
 public class KakaoMobilityClient {
@@ -98,7 +98,8 @@ public class KakaoMobilityClient {
                 sectionDistances,
                 summary.path("distance").asInt(),
                 summary.path("fare").path("taxi").asInt(),
-                summary.path("fare").path("toll").asInt());
+                summary.path("fare").path("toll").asInt(),
+                summary.path("duration").asInt());
     }
 
     /** 카카오 좌표 형식은 "경도,위도" 순서다. */
@@ -110,9 +111,14 @@ public class KakaoMobilityClient {
     public record KakaoRoute(
             List<Integer> sectionDistancesM,  // 경유지로 나뉜 구간별 거리(m)
             int distanceM,                    // 전체 거리(m)
-            int taxiFareWon,                  // 택시 요금(원). 호출 시각 기준 심야할증 포함
-            int tollWon                       // 통행료(원)
-    ) {}
+            int taxiFareWon,                  // 택시 요금(원). 심야할증은 들어 있지 않다(출발 시각 기준으로 서비스에서 곱한다)
+            int tollWon,                      // 통행료(원)
+            int durationSec                   // 예상 소요 시간(초). 모르면 0
+    ) {
+        public KakaoRoute(List<Integer> sectionDistancesM, int distanceM, int taxiFareWon, int tollWon) {
+            this(sectionDistancesM, distanceM, taxiFareWon, tollWon, 0);
+        }
+    }
 
     /** 카카오 길찾기를 쓸 수 없을 때. 호출한 쪽은 요금표 공식으로 대신 계산한다. */
     public static class KakaoRouteException extends RuntimeException {
