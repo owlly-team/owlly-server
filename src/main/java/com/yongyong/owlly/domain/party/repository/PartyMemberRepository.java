@@ -45,6 +45,15 @@ public interface PartyMemberRepository extends JpaRepository<PartyMember, Long> 
             """)
     Optional<Long> findMemberIdByPartyIdAndUserId(@Param("partyId") Long partyId, @Param("userId") Long userId);
 
+    /** 신고 대상의 사용자 ID. 프로필 표시 정보에 의존하지 않는다. */
+    @Query("""
+            select j.userId from PartyMember m
+            join RideRequest r on r.id = m.requestId
+            join Journey j on j.id = r.journeyId
+            where m.id = :memberId
+            """)
+    Optional<Long> findUserIdByMemberId(@Param("memberId") Long memberId);
+
     @Query("""
             select new com.yongyong.owlly.domain.party.dto.PartyMemberRow(
                 m.id, j.userId, m.decision, m.boardingStatus, r.genderSnapshot,

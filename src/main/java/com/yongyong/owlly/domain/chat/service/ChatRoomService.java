@@ -180,12 +180,17 @@ public class ChatRoomService {
         jdbc.update("delete from room_accounts where room_id=?", room.getId());
     }
 
+    /** 신고도 메시지 전송과 같은 현재 멤버·계좌·방 수명 검사를 거치며 팟 잠금을 공유한다. */
+    public Long requireReportAccess(Long userId, Long roomId) {
+        return access(userId, roomId, null, true);
+    }
+
     private Long access(Long userId, Long roomId, Instant now, boolean sending) {
         var partyId = rooms.findPartyIdById(roomId).orElseThrow(() -> new OwllyException(ErrorCode.RESOURCE_NOT_FOUND));
         RideParty party = lockParty(partyId);
         Long memberId = acceptedUser(partyId, userId);
         ChatRoom room = rooms.findById(roomId).orElseThrow(() -> new OwllyException(ErrorCode.RESOURCE_NOT_FOUND));
-        requireOpen(party, room, now, sending);
+        requireOpen(party, room, now == null ? Instant.now() : now, sending);
         requireRepresentativeAccount(party, room, memberId);
         return memberId;
     }

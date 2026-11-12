@@ -9,6 +9,8 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Index;
+import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -19,7 +21,9 @@ import lombok.NoArgsConstructor;
 /** 신고 사건과 제한된 증거. 동일 팟의 본인 외 다른 멤버만 신고. */
 @Entity
 @Getter
-@Table(name = "safety_reports")
+@Table(name = "safety_reports", uniqueConstraints = @UniqueConstraint(name = "uk_safety_report_room_reporter_target",
+        columnNames = {"room_id", "reporter_member_id", "target_member_id"}),
+        indexes = @Index(name = "idx_safety_report_evidence_expiry", columnList = "evidence_delete_after"))
 @Builder
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -49,11 +53,11 @@ public class SafetyReport extends BaseTimeEntity {
     @Column(name = "reason_code", nullable = false, length = 30)
     private ReportReasonCode reasonCode;
 
-    /** 마스킹된 대화 증거의 암호화 스냅샷. */
+    /** 신고 시점까지 방 전체 대화와 선택 설명을 마스킹·암호화한 사본. 만료 시 NULL. */
     @Column(name = "evidence_encrypted", columnDefinition = "text")
     private String evidenceEncrypted;
 
-    /** 신고 기록 7일 보존 후 증거 삭제 예정. */
+    /** 기획 질문 v3: 신고 접수 시각부터 7일. 재시도·다른 신고로 연장하지 않는다. */
     @Column(name = "evidence_delete_after", nullable = false)
     private Instant evidenceDeleteAfter;
 

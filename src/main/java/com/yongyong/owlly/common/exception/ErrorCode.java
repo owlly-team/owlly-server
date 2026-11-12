@@ -69,6 +69,10 @@ public enum ErrorCode {
     ROOM_CLOSED(HttpStatus.CONFLICT, "채팅방이 닫혔습니다."),
     MESSAGE_REJECTED(HttpStatus.UNPROCESSABLE_ENTITY, "보낼 수 없는 메시지입니다."),
 
+    // ===== 안전 신고 =====
+    INVALID_REPORT_TARGET(HttpStatus.UNPROCESSABLE_ENTITY, "신고할 수 없는 대상 또는 메시지입니다."),
+    REPORT_ALREADY_EXISTS(HttpStatus.CONFLICT, "이 방에서 이미 신고한 대상입니다."),
+
     // ===== 정산 (settlement) =====
     SETTLEMENT_NOT_READY(HttpStatus.CONFLICT, "아직 정산이 생성되지 않았습니다."),
     ACCOUNT_NOT_REGISTERED(HttpStatus.CONFLICT, "수취 계좌가 아직 등록되지 않았습니다."),
