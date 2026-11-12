@@ -412,7 +412,7 @@ sections:
         method: GET
         path: /banks
         desc: 수취 계좌 은행 목록
-        status: 시작 전
+        status: 완료
         auth: 학생 (STUDENT)
         success: "200 · data = Bank[]"
         req: 없음
