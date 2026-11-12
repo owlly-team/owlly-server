@@ -636,7 +636,7 @@
 
 **요청 본문:** 없음
 
-**처리·검증:** 출발 15분 전까지만 허용(now <= departureAt-15m). PENDING이면 DECLINED, ACCEPTED이면 LEFT. 관련 신청은 CANCELLED로 종료. 이미 빠졌으면 같은 응답. 본인이 보냈거나 받은 SENT/RECEIVED 송금이 있으면 자동 처리 금지(409 FUNDS_ALREADY_IN_FLIGHT). 대표가 빠지거나 남은 인원이 1명이면 팟 해산(CANCELLED), 남은 사람 신청은 FAILED로 바꾸고 매칭 실패 알림(대표 승계 없음, 기획 답변·화면정의서 v0.3 S-05). 2명 이상 남으면 기존 하차 순서에서 빠진 사람만 지워 경로를 재계산하고 route_version 증가(대표 유지). 예상금액 재계산은 정산 쪽 예상 정산 구현 후 연결.
+**처리·검증:** 출발 15분 전까지만 허용(now <= departureAt-15m). PENDING이면 DECLINED, ACCEPTED이면 LEFT. 관련 신청은 CANCELLED로 종료. 이미 빠졌으면 같은 응답. 본인이 보냈거나 받은 SENT/RECEIVED 송금이 있으면 자동 처리 금지(409 FUNDS_ALREADY_IN_FLIGHT). 대표가 빠지거나 남은 인원이 1명이면 팟 해산(CANCELLED), 남은 사람 신청은 FAILED로 바꾸고 매칭 실패 알림(대표 승계 없음, 기획 답변·화면정의서 v0.3 S-05). 2명 이상 남으면 기존 하차 순서에서 빠진 사람만 지워 경로를 재계산하고 route_version 증가(대표 유지). 경로를 재계산한 뒤 새 전체 예상 요금으로 정산의 `reEstimate`가 남은 사람의 예상 분담액을 다시 계산한다(화면정의서 S-06 더보기 "남은 사람 예상 분담액 다시 계산"; 이미 보낸 선송금은 바꾸지 않는다. 선송금은 집결 시각에 시작하고 방 나가기는 출발 15분 전에 마감되어 화면 흐름상 겹치지 않는다). 확정 마감 처리에서 미확정 멤버를 뺄 때도 같은 재계산을 한다.
 
 **업무 오류:** `409 CANCELLATION_DEADLINE_PASSED`, `409 FUNDS_ALREADY_IN_FLIGHT`, `503 POLICY_NOT_CONFIGURED`
 

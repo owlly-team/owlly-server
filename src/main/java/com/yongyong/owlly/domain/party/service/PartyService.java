@@ -31,6 +31,7 @@ import com.yongyong.owlly.domain.region.dto.PickupPointResponse;
 import com.yongyong.owlly.domain.region.entity.PickupPoint;
 import com.yongyong.owlly.domain.region.repository.PickupPointRepository;
 import com.yongyong.owlly.domain.region.service.PlaceNameReader;
+import com.yongyong.owlly.domain.settlement.service.SettlementEstimateService;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -79,6 +80,7 @@ public class PartyService {
     private final JourneyRepository journeyRepository;
     private final ChatRoomService chatRoomService;
     private final TaxiFareService taxiFareService;
+    private final SettlementEstimateService settlementEstimateService;
     private final NotificationService notificationService;
     private final EncryptedValueReader encryptedValueReader;
     private final PlaceNameReader placeNameReader;
@@ -203,7 +205,8 @@ public class PartyService {
      *   (기획 답변 3, 화면정의서 S-05 ⑦)
      * - 2명 이상 남으면 빠진 사람만 지운 하차 순서로 경로를 다시 계산해 새 경로 버전으로 저장한다.
      *   대표(마지막 하차자)는 그대로다.
-     * 예상 정산 다시 계산은 정산 쪽 예상 정산이 채워지면 붙인다.
+     * 남은 사람의 예상 분담액은 새 경로의 전체 예상 요금으로 정산 쪽 reEstimate 가 다시 계산한다
+     * (화면정의서 S-06 더보기 "남은 사람 예상 분담액 다시 계산"). 이미 보낸 선송금은 바꾸지 않는다.
      * 이미 빠진 재시도가 아니면 If-Match 가 지금 팟 ETag 와 같은지 먼저 본다(다르면 412).
      */
     @Transactional
@@ -244,7 +247,8 @@ public class PartyService {
         if (representativeLeft || remaining.size() < PartyGrouper.MIN_PARTY_SIZE) {
             disband(party, remaining, requestById, userIdByMemberId, representativeLeft);
         } else {
-            rerouteWithout(party, List.of(me), members, requestById, now);
+            int newTotalWon = rerouteWithout(party, List.of(me), members, requestById, now);
+            settlementEstimateService.reEstimate(party.getId(), newTotalWon);
         }
         return getParty(userId, partyId, now);
     }
@@ -274,7 +278,7 @@ public class PartyService {
      * 빠진 사람만 지운 하차 순서로 구간 거리를 다시 받아 새 경로 버전으로 저장한다.
      * 처음부터 다시 정렬하지 않는 이유: 마지막 하차자(대표)가 바뀌면 안 되기 때문이다(대표 승계 없음).
      */
-    private void rerouteWithout(RideParty party, List<PartyMember> leavers, List<PartyMember> members,
+    private int rerouteWithout(RideParty party, List<PartyMember> leavers, List<PartyMember> members,
                                 Map<Long, RideRequest> requestById, Instant now) {
         Set<Long> leaverIds = leavers.stream().map(PartyMember::getId).collect(Collectors.toSet());
         Map<Long, Long> requestIdByMemberId = members.stream()
@@ -308,6 +312,7 @@ public class PartyService {
         }
         partyStopRepository.saveAll(newStops);
         party.changeRoute(newRouteVersion);
+        return route.totalFareWon();
     }
 
     /**
@@ -381,7 +386,8 @@ public class PartyService {
             case DISBAND_TOO_FEW -> disband(party, confirmed, requestById, userIdByMemberId, false);
             case CONTINUE_WITH_CONFIRMED -> {
                 if (!unconfirmed.isEmpty()) {
-                    rerouteWithout(party, unconfirmed, members, requestById, now);
+                    int newTotalWon = rerouteWithout(party, unconfirmed, members, requestById, now);
+                    settlementEstimateService.reEstimate(party.getId(), newTotalWon);
                 }
                 party.startPrepaying();
             }
