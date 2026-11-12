@@ -84,7 +84,7 @@
 - 귀가·신청·메시지의 clientJourneyKey/clientRequestKey/clientMessageId도 DB 고유키로 검증합니다. **한 번의 귀가 재등록에는 같은 journeyId를 유지하고 새 clientRequestKey를 사용합니다.**
 - `If-Match` 표시가 있는 명령은 직전 해당 자원 GET/수정 성공 응답의 ETag를 전달합니다. 누락은 428, 값이 오래됐으면 412입니다. ETag는 관련 레코드 상태를 함께 반영하는 강한 검증자로 계산하는 제안이며 ERD의 별도 필드로 추가하지 않았습니다.
 - 재시도는 서버에 이미 완료된 동일 멱등 요청을 먼저 확인한 뒤 ETag를 검사합니다. 새 요청은 잠금·조건부 갱신으로 보호합니다.
-- **오류 시 기록 예외:** 정산 finalize에서 음수 환급이 발견되면 REVIEW_REQUIRED 상태 기록 후 409를 반환합니다. finalizedAt·확정 분담액·환급 이체는 만들지 않습니다. 이메일 인증은 잘못된 코드의 실패 횟수·멱등 요청 결과를 기록하고, 발급 정보를 커밋한 후 SMTP 발송이 실패한 경우에도 발급 건을 유지합니다. 관계자 로그인도 실패 횟수·잠금·멱등 기록을 먼저 커밋하고 401/403/429를 반환합니다. 그 밖의 검증 실패는 업무 변경을 커밋하지 않습니다.
+- **오류 시 기록 예외:** 이메일 인증은 잘못된 코드의 실패 횟수·멱등 요청 결과를 기록하고, 발급 정보를 커밋한 후 SMTP 발송이 실패한 경우에도 발급 건을 유지합니다. 관계자 로그인도 실패 횟수·잠금·멱등 기록을 먼저 커밋하고 401/403/429를 반환합니다. 그 밖의 검증 실패는 업무 변경을 커밋하지 않습니다.
 
 ### 응답 노출 범위
 
@@ -816,7 +816,7 @@
 
 **요청 본문:** 없음
 
-**처리·검증:** 대표에게 모든 개인 정산, 일반 멤버에게 본인 항목만 반환. 타인 환급 계좌와 정확한 경로는 포함하지 않음. 생성 전에는 409 SETTLEMENT_NOT_READY.
+**처리·검증:** 대표·일반 멤버 모두에게 팟 전원의 개인 정산 항목을 반환(정산내역-멤버 화면이 전원 분담·송금 현황을 보여줌). 타인 환급 계좌번호와 정확한 경로는 포함하지 않음(계좌번호는 응답 DTO에 없고 API-31로 인가된 송금자에게만). 생성 전에는 409 SETTLEMENT_NOT_READY.
 
 **업무 오류:** `409 SETTLEMENT_NOT_READY`
 
@@ -890,7 +890,7 @@
 }
 ```
 
-**처리·검증:** 저장하지 않는 계산. 원본 상한 actualTotalWon <= floor(estimatedTotalWon*1.2). 예정 경로 구간거리/구간 탑승 인원으로 나누고 원 단위 나머지 배분. 대표 환급 0, 일반 멤버 음수 환급/미탑승 예외는 canFinalize=false와 사유 반환.
+**처리·검증:** 저장하지 않는 계산. 원본 상한 actualTotalWon <= floor(estimatedTotalWon*1.2). 예정 경로 구간거리/구간 탑승 인원으로 나누고 원 단위 나머지 배분. 차액 = 선송금 − 확정 분담(양수 환급 대표→멤버, 음수 추가 납부 멤버→대표). 대표 환급 0. 음수 차액(추가 납부)은 디자인(S-06w)에 따라 허용하여 확정을 막지 않는다(canFinalize=true). blockingReasons 는 미탑승 등 후속 정책용으로 지금은 빈 목록.
 
 **업무 오류:** `422 FARE_LIMIT_EXCEEDED`, `409 ROUTE_VERSION_CONFLICT`, `409 INVALID_ROUTE_DISTANCE`, `409 SETTLEMENT_FINALIZED`
 
@@ -911,7 +911,7 @@
 }
 ```
 
-**처리·검증:** 미리보기 결과를 신뢰하지 않고 잠금 후 재계산. 정상인 경우 개인 부담 합계=실제 요금, finalized_at 기록, 양수 환급만 PENDING REFUND 생성, 대표/0원 환급은 이체 없이 완료. 영수증 권한 거절 시 금액만 입력하는 원본 경로 허용. 음수 환급이 발견되면 REVIEW_REQUIRED 상태만 기록하고 409 반환하며 finalized_at·이체·확정 부담액은 생성/갱신하지 않는 예외를 명시.
+**처리·검증:** 미리보기 결과를 신뢰하지 않고 재계산. 선송금 전원 수령(RECEIVED) 전이면 409 PREPAY_NOT_COMPLETED. 개인 부담 합계=실제 요금, finalized_at·actual_total_won 기록. 차액 = 선송금 − 확정 분담: 양수 환급은 PENDING REFUND 이체(대표→멤버) 생성, 음수 차액은 추가 납부로 허용하여 이체 없이 항목에 음수로 기록(멤버가 수동 송금, 디자인 S-06w), 대표/0원은 이체 없이 완료. 차액이 남으면 정산 REFUNDING·항목 REFUND_PENDING, 없으면 COMPLETED. 확정 직전 조회 ETag 를 If-Match 로 확인(불일치 412). 이미 확정됐으면 같은 응답(멱등).
 
 **업무 오류:** `422 FARE_LIMIT_EXCEEDED`, `409 ROUTE_VERSION_CONFLICT`, `409 PREPAY_NOT_COMPLETED`, `409 ADDITIONAL_PAYMENT_POLICY_REQUIRED`, `409 BOARDING_POLICY_REQUIRED`, `409 SETTLEMENT_FINALIZED`
 
@@ -1525,6 +1525,10 @@
 | --- | --- | --- | --- |
 | `id` | string | 예 | 개인 정산 ID; 형식: `^[1-9][0-9]*$` |
 | `memberId` | string | 예 | 팟 참여 ID; 형식: `^[1-9][0-9]*$` |
+| `maskedName` | string / null | 예 | 마스킹 이름(예: 김*연). S-06 정산 표의 '이름' |
+| `distanceMeters` | integer / null | 예 | 출발지부터 이 멤버 하차까지 누적 거리(m). S-06 '구간'. 핀 없으면 null |
+| `isRepresentative` | boolean | 예 | 대표(마지막 하차자) 여부. 화면 '· 대표'·'결제함' 표기 |
+| `isMe` | boolean | 예 | 조회자 본인 여부. 화면 '나' 표기·'돌려받을 금액' 카드 |
 | `estimatedShareWon` | integer | 예 | 예상 부담; 최소 0 |
 | `prepayDueWon` | integer | 예 | 대표는 0; 최소 0 |
 | `actualShareWon` | integer / null | 예 | 최종 부담 |
@@ -1542,7 +1546,7 @@
 | `actualTotalWon` | integer / null | 예 | 실제 전체 요금 |
 | `routeVersion` | integer | 예 | 계산 경로 버전; 최소 1 |
 | `status` | string | 예 | 상태; ESTIMATED / PREPAYING / AWAITING_FARE / REFUNDING / COMPLETED / REVIEW_REQUIRED |
-| `items` | SettlementItem[] | 예 | 대표에게 전체; 일반 멤버에게 본인 항목만 |
+| `items` | SettlementItem[] | 예 | 대표·일반 멤버 모두 팟 전원 항목; 타인 계좌번호·정확한 경로 제외 |
 | `receiptAvailable` | boolean | 예 | 영수증 존재 여부 |
 | `finalizedAt` | string (date-time) / null | 예 | 정산 확정 |
 | `refundDueAt` | string (date-time) / null | 예 | 환급 기한 |
@@ -1568,7 +1572,7 @@
 | --- | --- | --- | --- |
 | `memberId` | string | 예 | 멤버; 형식: `^[1-9][0-9]*$` |
 | `actualShareWon` | integer | 예 | 계산 부담; 최소 0 |
-| `refundDueWon` | integer | 예 | 대표 0; 음수는 미확정 정책 필요 |
+| `refundDueWon` | integer | 예 | 선송금 − 확정. 양수=환급(대표→멤버), 음수=추가 납부(멤버→대표); 대표 0 |
 
 ### FarePreview
 
@@ -1755,7 +1759,7 @@
 
 ### 응답 예시
 
-응답은 호출자의 권한에 맞춰 달라집니다. 아래의 일반 멤버 정산에는 본인 항목만 있고, 대표의 확정 응답에는 전원 항목이 있습니다. 예시 날짜·만료 시각은 정책의 확정값이 아닙니다.
+정산 조회·확정 응답에는 호출자 권한과 무관하게 팟 전원의 개인 항목이 `items` 배열로 들어갑니다(타인 계좌번호·정확한 경로는 제외). 예시 날짜·만료 시각은 정책의 확정값이 아닙니다.
 
 ### GET /auth/session · 200 응답 예시
 
@@ -1777,6 +1781,8 @@
 
 ### GET /parties/{partyId}/settlement · 200 응답 예시
 
+조회자가 대표든 일반 멤버든 **팟 전원의 개인 항목이 `items` 배열로** 내려온다(타인 계좌번호·정확한 경로는 제외). 아래는 대표(503)와 일반 멤버(501)로 이뤄진 팟 예시.
+
 ```json
 {
   "data": {
@@ -1790,6 +1796,10 @@
       {
         "id": "10001",
         "memberId": "501",
+        "maskedName": "김*연",
+        "distanceMeters": 8000,
+        "isRepresentative": false,
+        "isMe": true,
         "estimatedShareWon": 5000,
         "prepayDueWon": 6000,
         "actualShareWon": 5000,
@@ -1819,6 +1829,20 @@
             "receivedAt": null
           }
         ]
+      },
+      {
+        "id": "10002",
+        "memberId": "503",
+        "maskedName": "이*준",
+        "distanceMeters": 16000,
+        "isRepresentative": true,
+        "isMe": false,
+        "estimatedShareWon": 25000,
+        "prepayDueWon": 0,
+        "actualShareWon": 25000,
+        "refundDueWon": 0,
+        "status": "COMPLETED",
+        "transfers": []
       }
     ],
     "receiptAvailable": true,
@@ -1844,6 +1868,10 @@
       {
         "id": "10001",
         "memberId": "501",
+        "maskedName": "김*연",
+        "distanceMeters": 8000,
+        "isRepresentative": false,
+        "isMe": false,
         "estimatedShareWon": 5000,
         "prepayDueWon": 6000,
         "actualShareWon": 5000,
@@ -1877,6 +1905,10 @@
       {
         "id": "10002",
         "memberId": "502",
+        "maskedName": "한*윤",
+        "distanceMeters": 12000,
+        "isRepresentative": false,
+        "isMe": false,
         "estimatedShareWon": 8750,
         "prepayDueWon": 10500,
         "actualShareWon": 8750,
@@ -1910,6 +1942,10 @@
       {
         "id": "10003",
         "memberId": "503",
+        "maskedName": "이*준",
+        "distanceMeters": 16000,
+        "isRepresentative": true,
+        "isMe": true,
         "estimatedShareWon": 16250,
         "prepayDueWon": 0,
         "actualShareWon": 16250,
