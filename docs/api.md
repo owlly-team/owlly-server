@@ -84,7 +84,7 @@
 - 귀가·신청·메시지의 clientJourneyKey/clientRequestKey/clientMessageId도 DB 고유키로 검증합니다. **한 번의 귀가 재등록에는 같은 journeyId를 유지하고 새 clientRequestKey를 사용합니다.**
 - `If-Match` 표시가 있는 명령은 직전 해당 자원 GET/수정 성공 응답의 ETag를 전달합니다. 누락은 428, 값이 오래됐으면 412입니다. ETag는 관련 레코드 상태를 함께 반영하는 강한 검증자로 계산하는 제안이며 ERD의 별도 필드로 추가하지 않았습니다.
 - 재시도는 서버에 이미 완료된 동일 멱등 요청을 먼저 확인한 뒤 ETag를 검사합니다. 새 요청은 잠금·조건부 갱신으로 보호합니다.
-- **오류 시 기록 예외:** 정산 finalize에서 음수 환급이 발견되면 REVIEW_REQUIRED 상태 기록 후 409를 반환합니다. finalizedAt·확정 분담액·환급 이체는 만들지 않습니다. 이메일 인증은 잘못된 코드의 실패 횟수·멱등 요청 결과를 기록하고, 발급 정보를 커밋한 후 SMTP 발송이 실패한 경우에도 발급 건을 유지합니다. 관계자 로그인도 실패 횟수·잠금·멱등 기록을 먼저 커밋하고 401/403/429를 반환합니다. 그 밖의 검증 실패는 업무 변경을 커밋하지 않습니다.
+- **오류 시 기록 예외:** 이메일 인증은 잘못된 코드의 실패 횟수·멱등 요청 결과를 기록하고, 발급 정보를 커밋한 후 SMTP 발송이 실패한 경우에도 발급 건을 유지합니다. 관계자 로그인도 실패 횟수·잠금·멱등 기록을 먼저 커밋하고 401/403/429를 반환합니다. 그 밖의 검증 실패는 업무 변경을 커밋하지 않습니다.
 
 ### 응답 노출 범위
 
@@ -911,7 +911,7 @@
 }
 ```
 
-**처리·검증:** 미리보기 결과를 신뢰하지 않고 잠금 후 재계산. 정상인 경우 개인 부담 합계=실제 요금, finalized_at 기록, 양수 환급만 PENDING REFUND 생성, 대표/0원 환급은 이체 없이 완료. 영수증 권한 거절 시 금액만 입력하는 원본 경로 허용. 음수 환급이 발견되면 REVIEW_REQUIRED 상태만 기록하고 409 반환하며 finalized_at·이체·확정 부담액은 생성/갱신하지 않는 예외를 명시.
+**처리·검증:** 미리보기 결과를 신뢰하지 않고 재계산. 선송금 전원 수령(RECEIVED) 전이면 409 PREPAY_NOT_COMPLETED. 개인 부담 합계=실제 요금, finalized_at·actual_total_won 기록. 차액 = 선송금 − 확정 분담: 양수 환급은 PENDING REFUND 이체(대표→멤버) 생성, 음수 차액은 추가 납부로 허용하여 이체 없이 항목에 음수로 기록(멤버가 수동 송금, 디자인 S-06w), 대표/0원은 이체 없이 완료. 차액이 남으면 정산 REFUNDING·항목 REFUND_PENDING, 없으면 COMPLETED. 확정 직전 조회 ETag 를 If-Match 로 확인(불일치 412). 이미 확정됐으면 같은 응답(멱등).
 
 **업무 오류:** `422 FARE_LIMIT_EXCEEDED`, `409 ROUTE_VERSION_CONFLICT`, `409 PREPAY_NOT_COMPLETED`, `409 ADDITIONAL_PAYMENT_POLICY_REQUIRED`, `409 BOARDING_POLICY_REQUIRED`, `409 SETTLEMENT_FINALIZED`
 

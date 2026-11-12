@@ -3,6 +3,7 @@ package com.yongyong.owlly.domain.settlement.controller;
 import com.yongyong.owlly.common.response.ApiResponse;
 import com.yongyong.owlly.common.security.SessionPrincipal;
 import com.yongyong.owlly.common.web.ETags;
+import com.yongyong.owlly.common.web.IdempotencyKey;
 import com.yongyong.owlly.domain.settlement.dto.FareInput;
 import com.yongyong.owlly.domain.settlement.dto.FarePreview;
 import com.yongyong.owlly.domain.settlement.dto.SettlementResponse;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -60,5 +62,20 @@ public class SettlementController {
         Long callerMemberId = memberResolver.memberOfParty(partyId, principal.userId());
         FarePreview preview = settlementFareService.preview(partyId, callerMemberId, input);
         return ResponseEntity.ok(ApiResponse.of(preview));
+    }
+
+    /** API-38 실제 요금·개인 부담·환급 확정. 대표만. 환급 PENDING 이체 생성·정산 확정. */
+    @PostMapping("/finalize")
+    public ResponseEntity<ApiResponse<SettlementResponse>> finalize(
+            @AuthenticationPrincipal SessionPrincipal principal,
+            @PathVariable @Positive Long partyId,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @RequestHeader("If-Match") String ifMatch,
+            @Valid @RequestBody FareInput input) {
+        IdempotencyKey.requireUuid(idempotencyKey);
+        // 팟 참여자 확인(아니면 404). 대표 여부는 서비스에서 확인(아니면 403).
+        Long callerMemberId = memberResolver.memberOfParty(partyId, principal.userId());
+        SettlementResponse settlement = settlementFareService.finalizeSettlement(partyId, callerMemberId, input, ifMatch);
+        return ResponseEntity.ok().eTag(ETags.of(settlement)).body(ApiResponse.of(settlement));
     }
 }

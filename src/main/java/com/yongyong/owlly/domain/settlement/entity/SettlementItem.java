@@ -67,4 +67,14 @@ public class SettlementItem extends BaseTimeEntity {
         this.estimatedShareWon = estimatedShareWon;
         this.prepayDueWon = prepayDueWon;
     }
+
+    /**
+     * 실제 요금으로 개인 부담을 확정한다 (API-38).
+     * refundDueWon = 선송금 − 확정 분담(양수 환급, 음수 추가 납부). 차액이 남으면 REFUND_PENDING, 없으면 COMPLETED.
+     */
+    public void finalizeFare(int actualShareWon, int refundDueWon, SettlementItemStatus status) {
+        this.actualShareWon = actualShareWon;
+        this.refundDueWon = refundDueWon;
+        this.status = status;
+    }
 }

@@ -71,4 +71,15 @@ public class Settlement extends BaseTimeEntity {
         this.routeVersion = routeVersion;
         this.estimatedTotalWon = estimatedTotalWon;
     }
+
+    /**
+     * 실제 요금으로 정산을 확정한다 (API-38). 확정 시각과 실제 전체 요금을 기록하고 상태를 바꾼다.
+     * 돌려줄 환급이 남았으면 REFUNDING, 전부 정리됐으면 COMPLETED.
+     */
+    public void finalizeFare(int actualTotalWon, SettlementStatus status, Instant finalizedAt, Instant refundDueAt) {
+        this.actualTotalWon = actualTotalWon;
+        this.status = status;
+        this.finalizedAt = finalizedAt;
+        this.refundDueAt = refundDueAt;
+    }
 }

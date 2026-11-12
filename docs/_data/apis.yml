@@ -560,7 +560,7 @@ sections:
         method: POST
         path: /parties/{id}/settlement/finalize
         desc: 실제 요금·개인 부담·환급 확정
-        status: 시작 전
+        status: 완료
         auth: 해당 팟 대표 (REPRESENTATIVE) · Idempotency-Key · If-Match 필수
         success: "200 · data = Settlement"
         req: |
@@ -586,7 +586,7 @@ sections:
               "allowedActions": []
             }
           }
-        errors: ["422 FARE_LIMIT_EXCEEDED", "409 ROUTE_VERSION_CONFLICT", "409 PREPAY_NOT_COMPLETED", "409 ADDITIONAL_PAYMENT_POLICY_REQUIRED", "409 BOARDING_POLICY_REQUIRED", "409 SETTLEMENT_FINALIZED"]
+        errors: ["403 FORBIDDEN", "412 PRECONDITION_FAILED", "409 SETTLEMENT_NOT_READY", "422 FARE_LIMIT_EXCEEDED", "409 ROUTE_VERSION_CONFLICT", "409 INVALID_ROUTE_DISTANCE", "409 PREPAY_NOT_COMPLETED"]
       - id: API-39
         method: POST
         path: /transfers/{id}/sent
