@@ -63,6 +63,12 @@ public enum ErrorCode {
     BOARDING_NOT_ALLOWED(HttpStatus.CONFLICT, "지금은 탑승 여부를 기록할 수 없습니다."),
     BOARDING_ALREADY_RECORDED(HttpStatus.CONFLICT, "이미 기록한 탑승 여부는 바꿀 수 없습니다."),
 
+    // ===== 팟 채팅 =====
+    ROOM_NOT_READY(HttpStatus.CONFLICT, "아직 채팅방에 입장할 수 없습니다."),
+    ROOM_ACCESS_EXPIRED(HttpStatus.GONE, "채팅방 이용이 종료되었습니다."),
+    ROOM_CLOSED(HttpStatus.CONFLICT, "채팅방이 닫혔습니다."),
+    MESSAGE_REJECTED(HttpStatus.UNPROCESSABLE_ENTITY, "보낼 수 없는 메시지입니다."),
+
     // ===== 정산 (settlement) =====
     SETTLEMENT_NOT_READY(HttpStatus.CONFLICT, "아직 정산이 생성되지 않았습니다."),
     ACCOUNT_NOT_REGISTERED(HttpStatus.CONFLICT, "수취 계좌가 아직 등록되지 않았습니다."),
