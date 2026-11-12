@@ -157,8 +157,6 @@
 | API-31 | PUT | `/rooms/{roomId}/accounts/{purpose}` | 내 선송금·환급 수취 계좌 등록 | 본인 계좌의 팟 참여자 |
 | API-32 | GET | `/transfers/{transferId}/recipient-account` | 송금할 수취 계좌 조회 | 해당 이체의 송금자 |
 | API-33 | GET | `/parties/{partyId}/settlement` | 예상·선송금·최종 정산 조회 | 해당 팟 참여자 |
-| API-34 | POST | `/parties/{partyId}/settlement/receipt` | 대표 결제 화면 첨부 | 해당 팟 대표 |
-| API-35 | GET | `/parties/{partyId}/settlement/receipt` | 참여자 결제 화면 열기 | 해당 팟 참여자 |
 | API-36 | PATCH | `/parties/{partyId}/settlement/route` | 정산 전 실제 하차 순서 수정 | 해당 팟 대표 |
 | API-37 | POST | `/parties/{partyId}/settlement/preview` | 실제 요금 분담·환급 미리보기 | 해당 팟 대표 |
 | API-38 | POST | `/parties/{partyId}/settlement/finalize` | 실제 요금·개인 부담·환급 확정 | 해당 팟 대표 |
@@ -844,34 +842,6 @@
 **업무 오류:** `409 SETTLEMENT_NOT_READY`
 
 **ERD 연결:** `settlements`, `settlement_items`, `transfers`, `party_members`
-
-### API-34 · POST /parties/{partyId}/settlement/receipt · 대표 결제 화면 첨부
-
-**권한:** 해당 팟 대표 (`REPRESENTATIVE`) · **성공:** 201 · 응답 `data: Receipt`
-
-경로 `partyId` 필수 · `Idempotency-Key` 필수 · `If-Match` 필수 · 성공 응답 `ETag`
-
-**요청 본문:** `ReceiptUpload` · multipart/form-data (`file` 바이너리 1개)
-
-**처리·검증:** multipart/form-data file 1개. 제안 제한 JPEG/PNG/WebP, 5MiB 이하; 실제 MIME·디코딩 검증, 메타데이터 제거, 비공개 객체 저장. 정산 확정 전만 교체 가능. 다른 팟 파일 참조 불가. 영수증은 OCR/결제 사실 자동 검증이 아님.
-
-**업무 오류:** `415 INVALID_FILE_TYPE`, `413 FILE_TOO_LARGE`, `409 SETTLEMENT_FINALIZED`
-
-**ERD 연결:** `settlements`
-
-### API-35 · GET /parties/{partyId}/settlement/receipt · 참여자 결제 화면 열기
-
-**권한:** 해당 팟 참여자 (`PARTY_MEMBER`) · **성공:** 200 · 응답 `data: Download`
-
-경로 `partyId` 필수
-
-**요청 본문:** 없음
-
-**처리·검증:** 해당 팟 참여자에게 만료되는 비공개 URL 발급. 영수증 보관 기간이 지나면 410. 계좌나 신용카드 민감 항목 노출을 최소화하도록 업로드 안내/처리 필요.
-
-**업무 오류:** `404 RECEIPT_NOT_FOUND`, `410 RECEIPT_EXPIRED`
-
-**ERD 연결:** `settlements`, `party_members`
 
 ### API-36 · PATCH /parties/{partyId}/settlement/route · 정산 전 실제 하차 순서 수정
 
@@ -1615,14 +1585,6 @@
 | `items` | FarePreviewItem[] | 예 | 예상 최종 부담 |
 | `canFinalize` | boolean | 예 | 확정 가능 |
 | `blockingReasons` | string[] | 예 | 예: ADDITIONAL_PAYMENT_POLICY_REQUIRED |
-
-### Receipt
-
-| 필드 | 타입 | 필수 | 의미·제약 |
-| --- | --- | --- | --- |
-| `available` | boolean | 예 | 첨부 여부 |
-| `uploadedAt` | string (date-time) | 예 | 업로드 시각 |
-| `contentType` | string | 예 | 허용 이미지; image/jpeg / image/png / image/webp |
 
 ### Download
 

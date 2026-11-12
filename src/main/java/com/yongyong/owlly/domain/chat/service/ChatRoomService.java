@@ -196,7 +196,8 @@ public class ChatRoomService {
     }
 
     private Long acceptedUser(Long partyId, Long userId) {
-        Long id = members.findMemberIdByPartyIdAndUserId(partyId, userId)
+        Long id = members.findMemberIdsByPartyIdAndUserId(partyId, userId)
+                .stream().findFirst()
                 .orElseThrow(() -> new OwllyException(ErrorCode.RESOURCE_NOT_FOUND));
         var member = members.findById(id).orElseThrow(() -> new OwllyException(ErrorCode.RESOURCE_NOT_FOUND));
         if (member.getDecision() != MemberDecision.ACCEPTED) throw new OwllyException(ErrorCode.FORBIDDEN);

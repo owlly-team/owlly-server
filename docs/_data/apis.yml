@@ -520,31 +520,11 @@ sections:
             }
           }
         errors: ["409 SETTLEMENT_NOT_READY"]
-      - id: API-34
-        method: POST
-        path: /parties/{id}/settlement/receipt
-        desc: 대표 결제 화면 첨부
-        status: 시작 전
-        auth: 해당 팟 대표 (REPRESENTATIVE) · Idempotency-Key · If-Match 필수
-        success: "201 · data = Receipt"
-        req: |
-          multipart/form-data · ReceiptUpload
-          file 바이너리 1개 (JPEG/PNG/WebP, 5MiB 이하)
-        errors: ["415 INVALID_FILE_TYPE", "413 FILE_TOO_LARGE", "409 SETTLEMENT_FINALIZED"]
-      - id: API-35
-        method: GET
-        path: /parties/{id}/settlement/receipt
-        desc: 참여자 결제 화면 열기
-        status: 시작 전
-        auth: 해당 팟 참여자 (PARTY_MEMBER)
-        success: "200 · data = Download (만료되는 비공개 URL)"
-        req: 없음
-        errors: ["404 RECEIPT_NOT_FOUND", "410 RECEIPT_EXPIRED"]
       - id: API-36
         method: PATCH
         path: /parties/{id}/settlement/route
         desc: 정산 전 실제 하차 순서 수정
-        status: 시작 전
+        status: 완료
         auth: 해당 팟 대표 (REPRESENTATIVE) · Idempotency-Key · If-Match 필수
         success: "200 · data = Settlement"
         req: |
