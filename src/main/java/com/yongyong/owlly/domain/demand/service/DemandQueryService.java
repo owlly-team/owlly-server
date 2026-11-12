@@ -6,13 +6,14 @@ import com.yongyong.owlly.common.exception.ErrorCode;
 import com.yongyong.owlly.common.exception.OwllyException;
 import com.yongyong.owlly.domain.demand.dto.DemandCandidate;
 import com.yongyong.owlly.domain.demand.dto.DemandCandidatePage;
-import com.yongyong.owlly.domain.demand.dto.DemandSummary;
 import com.yongyong.owlly.domain.demand.dto.Evidence;
 import com.yongyong.owlly.domain.demand.entity.DemandEstimate;
 import com.yongyong.owlly.domain.demand.entity.DemandRun;
 import com.yongyong.owlly.domain.demand.entity.DemandRunStatus;
 import com.yongyong.owlly.domain.demand.repository.DemandEstimateRepository;
 import com.yongyong.owlly.domain.demand.repository.DemandRunRepository;
+import com.yongyong.owlly.domain.region.entity.AdministrativeArea;
+import com.yongyong.owlly.domain.region.entity.PickupPoint;
 import com.yongyong.owlly.domain.region.repository.AdministrativeAreaRepository;
 import com.yongyong.owlly.domain.region.repository.PickupPointRepository;
 import java.time.LocalDate;
@@ -74,20 +75,8 @@ public class DemandQueryService {
 
         List<DemandCandidate> candidates = toCandidates(page);
         String nextCursor = hasMore ? DemandCursor.encode(page.get(page.size() - 1)) : null;
-        // 상단 집계 카드는 목록과 같은 필터(기간·요일·슬롯)로 표시 가능한 셀 전체를 합산한다(candidateOnly 무관).
-        DemandSummary summary = toSummary(
-                demandEstimates.summarize(run.getId(), query.weekday(), query.slotStart()).get(0));
         return DemandCandidatePage.of(
-                candidates, String.valueOf(run.getId()), run.getModelVersion(), hasMore, nextCursor, summary);
-    }
-
-    /** 집계 쿼리의 [journey, failed, solo, bus] 합을 요약 DTO 로 바꾼다. */
-    private DemandSummary toSummary(Object[] row) {
-        return new DemandSummary(
-                ((Number) row[0]).longValue(),
-                ((Number) row[1]).longValue(),
-                ((Number) row[2]).longValue(),
-                ((Number) row[3]).longValue());
+                candidates, String.valueOf(run.getId()), run.getModelVersion(), hasMore, nextCursor);
     }
 
     /** API-44 노선 후보 상세. 없거나 최소 표본 미달(숨김)이면 404(존재 여부를 노출하지 않는다). */
@@ -115,21 +104,21 @@ public class DemandQueryService {
                 .orElseThrow(() -> new OwllyException(ErrorCode.DEMAND_NOT_READY));
     }
 
-    /** 셀 목록을 거점·동 이름과 파싱한 근거 지표로 묶어 응답 DTO 로 만든다(이름은 한 번에 조회). */
+    /** 셀 목록을 거점·동(이름·좌표)과 파싱한 근거 지표로 묶어 응답 DTO 로 만든다(기준정보는 한 번에 조회). */
     private List<DemandCandidate> toCandidates(List<DemandEstimate> estimates) {
         Set<Long> pickupIds = estimates.stream().map(DemandEstimate::getPickupPointId).collect(Collectors.toSet());
         Set<Long> dongIds = estimates.stream().map(DemandEstimate::getDestinationDongId).collect(Collectors.toSet());
 
-        Map<Long, String> pickupNames = pickupPoints.findAllById(pickupIds).stream()
-                .collect(Collectors.toMap(p -> p.getId(), p -> p.getName()));
-        Map<Long, String> dongNames = administrativeAreas.findAllById(dongIds).stream()
-                .collect(Collectors.toMap(a -> a.getId(), a -> a.getName()));
+        Map<Long, PickupPoint> pickups = pickupPoints.findAllById(pickupIds).stream()
+                .collect(Collectors.toMap(PickupPoint::getId, p -> p));
+        Map<Long, AdministrativeArea> dongs = administrativeAreas.findAllById(dongIds).stream()
+                .collect(Collectors.toMap(AdministrativeArea::getId, a -> a));
 
         return estimates.stream()
                 .map(e -> DemandCandidate.of(
                         e,
-                        pickupNames.get(e.getPickupPointId()),
-                        dongNames.get(e.getDestinationDongId()),
+                        pickups.get(e.getPickupPointId()),
+                        dongs.get(e.getDestinationDongId()),
                         parseEvidence(e.getEvidence())))
                 .toList();
     }

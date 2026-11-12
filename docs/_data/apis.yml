@@ -642,15 +642,17 @@ sections:
               {
                 "id": "1501", "runId": "1401", "universityId": "1",
                 "pickupPointId": "11", "pickupPointName": "학교 정문 거점",
+                "pickupLatitude": 37.241234, "pickupLongitude": 127.08088,
                 "destinationDongId": "31", "destinationDongName": "예시동",
+                "destinationLatitude": 37.5035, "destinationLongitude": 126.9966,
                 "weekday": 4, "slotStart": "23:30",
                 "journeyCount": 12, "failedJourneyCount": 4, "pooledJourneyCount": 6,
                 "estimatedWeeklyDemand": 40, "candidateRank": 2, "candidateThreshold": 30
               }
             ],
-            "meta": { "runId": "1401", "modelVersion": "proposal-v1", "hasMore": false }
+            "meta": { "runId": "1401", "modelVersion": "proposal-v1", "hasMore": false, "nextCursor": null }
           }
-        errors: ["409 DEMAND_NOT_READY", "403 SCOPE_NOT_ALLOWED", "503 POLICY_NOT_CONFIGURED"]
+        errors: ["409 DEMAND_NOT_READY"]
       - id: API-44
         method: GET
         path: /demand/candidates/{id}
