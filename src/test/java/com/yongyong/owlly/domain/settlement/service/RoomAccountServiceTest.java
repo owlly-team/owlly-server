@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import com.yongyong.owlly.common.crypto.TextCryptor;
 import com.yongyong.owlly.common.exception.ErrorCode;
 import com.yongyong.owlly.common.exception.OwllyException;
+import com.yongyong.owlly.domain.chat.service.ChatRoomService;
 import com.yongyong.owlly.domain.settlement.dto.AccountInput;
 import com.yongyong.owlly.domain.settlement.dto.MaskedAccount;
 import com.yongyong.owlly.domain.settlement.dto.RecipientAccount;
@@ -39,11 +40,13 @@ class RoomAccountServiceTest {
     @Mock RoomAccountRepository roomAccounts;
     @Mock TransferRepository transfers;
     @Mock TextCryptor textCryptor;
+    @Mock ChatRoomService chatRooms;
     @InjectMocks RoomAccountService service;
 
     private static final Long ROOM_ID = 10L;
     private static final Long OWNER = 501L;
     private static final Long TRANSFER_ID = 801L;
+    private static final Long PARTY_ID = 401L;
 
     // ---------- API-31 등록 ----------
 
@@ -100,6 +103,7 @@ class RoomAccountServiceTest {
                 .bankCode("090").accountNumberEncrypted("ENC:num").holderNameEncrypted("ENC:holder")
                 .build();
         given(transfers.findById(TRANSFER_ID)).willReturn(Optional.of(transferWith(OWNER, 77L)));
+        given(transfers.findPartyIdById(TRANSFER_ID)).willReturn(Optional.of(PARTY_ID));
         given(roomAccounts.findById(77L)).willReturn(Optional.of(account));
         given(textCryptor.decrypt("ENC:num")).willReturn("3333124478210");
         given(textCryptor.decrypt("ENC:holder")).willReturn("이정준");
@@ -130,6 +134,7 @@ class RoomAccountServiceTest {
     @Test
     void 수취_계좌가_아직_연결_안됐으면_409_ACCOUNT_NOT_REGISTERED() {
         given(transfers.findById(TRANSFER_ID)).willReturn(Optional.of(transferWith(OWNER, null)));
+        given(transfers.findPartyIdById(TRANSFER_ID)).willReturn(Optional.of(PARTY_ID));
 
         assertThatThrownBy(() -> service.getRecipientAccount(OWNER, TRANSFER_ID))
                 .isInstanceOf(OwllyException.class)
@@ -139,6 +144,7 @@ class RoomAccountServiceTest {
     @Test
     void 계좌가_삭제_만료됐으면_410_ACCOUNT_EXPIRED() {
         given(transfers.findById(TRANSFER_ID)).willReturn(Optional.of(transferWith(OWNER, 77L)));
+        given(transfers.findPartyIdById(TRANSFER_ID)).willReturn(Optional.of(PARTY_ID));
         given(roomAccounts.findById(77L)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.getRecipientAccount(OWNER, TRANSFER_ID))
