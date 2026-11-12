@@ -681,7 +681,7 @@ sections:
         method: POST
         path: /staff/reports
         desc: 후보·조치로 리포트 초안 생성
-        status: 시작 전
+        status: 완료
         auth: 학교 관계자 (STAFF) · Idempotency-Key 필수
         success: "201 · data = StakeholderReport"
         req: |
@@ -697,7 +697,7 @@ sections:
         method: GET
         path: /staff/reports
         desc: 내 리포트 목록
-        status: 시작 전
+        status: 완료
         auth: 학교 관계자 (STAFF)
         success: "200 · data = StakeholderReport[]"
         req: |
@@ -708,7 +708,7 @@ sections:
         method: GET
         path: /staff/reports/{id}
         desc: 리포트 미리보기·생성 상태 조회
-        status: 시작 전
+        status: 완료
         auth: 리포트를 만든 관계자 (REPORT_OWNER) · ETag
         success: "200 · data = StakeholderReport"
         req: 없음

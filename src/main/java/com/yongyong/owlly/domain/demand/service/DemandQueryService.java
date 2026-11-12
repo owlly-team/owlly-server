@@ -1,27 +1,17 @@
 package com.yongyong.owlly.domain.demand.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yongyong.owlly.common.exception.ErrorCode;
 import com.yongyong.owlly.common.exception.OwllyException;
 import com.yongyong.owlly.domain.demand.dto.DemandCandidate;
 import com.yongyong.owlly.domain.demand.dto.DemandCandidatePage;
-import com.yongyong.owlly.domain.demand.dto.Evidence;
 import com.yongyong.owlly.domain.demand.entity.DemandEstimate;
 import com.yongyong.owlly.domain.demand.entity.DemandRun;
 import com.yongyong.owlly.domain.demand.entity.DemandRunStatus;
 import com.yongyong.owlly.domain.demand.repository.DemandEstimateRepository;
 import com.yongyong.owlly.domain.demand.repository.DemandRunRepository;
-import com.yongyong.owlly.domain.region.entity.AdministrativeArea;
-import com.yongyong.owlly.domain.region.entity.PickupPoint;
-import com.yongyong.owlly.domain.region.repository.AdministrativeAreaRepository;
-import com.yongyong.owlly.domain.region.repository.PickupPointRepository;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,9 +29,7 @@ public class DemandQueryService {
 
     private final DemandRunRepository demandRuns;
     private final DemandEstimateRepository demandEstimates;
-    private final PickupPointRepository pickupPoints;
-    private final AdministrativeAreaRepository administrativeAreas;
-    private final ObjectMapper objectMapper;
+    private final DemandCandidateAssembler candidateAssembler;
 
     /** 목록 조회 조건. 모두 선택값(cursor/limit 제외). */
     public record Query(
@@ -73,7 +61,7 @@ public class DemandQueryService {
         boolean hasMore = rows.size() > query.limit();
         List<DemandEstimate> page = hasMore ? rows.subList(0, query.limit()) : rows;
 
-        List<DemandCandidate> candidates = toCandidates(page);
+        List<DemandCandidate> candidates = candidateAssembler.assemble(page);
         String nextCursor = hasMore ? DemandCursor.encode(page.get(page.size() - 1)) : null;
         return DemandCandidatePage.of(
                 candidates, String.valueOf(run.getId()), run.getModelVersion(), hasMore, nextCursor);
@@ -84,7 +72,7 @@ public class DemandQueryService {
         DemandEstimate estimate = demandEstimates.findById(estimateId)
                 .filter(e -> !e.isSuppressed())
                 .orElseThrow(() -> new OwllyException(ErrorCode.RESOURCE_NOT_FOUND));
-        return toCandidates(List.of(estimate)).get(0);
+        return candidateAssembler.assemble(List.of(estimate)).get(0);
     }
 
     /** runId 지정 시 그 산출, 아니면 (기간이 오면 그 기간의) 최신 성공 산출. 없으면 409 DEMAND_NOT_READY. */
@@ -102,36 +90,5 @@ public class DemandQueryService {
         }
         return demandRuns.findFirstByStatusOrderByPeriodEndDescIdDesc(DemandRunStatus.SUCCEEDED)
                 .orElseThrow(() -> new OwllyException(ErrorCode.DEMAND_NOT_READY));
-    }
-
-    /** 셀 목록을 거점·동(이름·좌표)과 파싱한 근거 지표로 묶어 응답 DTO 로 만든다(기준정보는 한 번에 조회). */
-    private List<DemandCandidate> toCandidates(List<DemandEstimate> estimates) {
-        Set<Long> pickupIds = estimates.stream().map(DemandEstimate::getPickupPointId).collect(Collectors.toSet());
-        Set<Long> dongIds = estimates.stream().map(DemandEstimate::getDestinationDongId).collect(Collectors.toSet());
-
-        Map<Long, PickupPoint> pickups = pickupPoints.findAllById(pickupIds).stream()
-                .collect(Collectors.toMap(PickupPoint::getId, p -> p));
-        Map<Long, AdministrativeArea> dongs = administrativeAreas.findAllById(dongIds).stream()
-                .collect(Collectors.toMap(AdministrativeArea::getId, a -> a));
-
-        return estimates.stream()
-                .map(e -> DemandCandidate.of(
-                        e,
-                        pickups.get(e.getPickupPointId()),
-                        dongs.get(e.getDestinationDongId()),
-                        parseEvidence(e.getEvidence())))
-                .toList();
-    }
-
-    /** evidence(jsonb 배열 문자열)를 Evidence[] 로 역직렬화한다. 비었거나 깨졌으면 빈 목록. */
-    private List<Evidence> parseEvidence(String json) {
-        if (json == null || json.isBlank()) {
-            return List.of();
-        }
-        try {
-            return objectMapper.readValue(json, new TypeReference<List<Evidence>>() {});
-        } catch (Exception e) {
-            return List.of();
-        }
     }
 }

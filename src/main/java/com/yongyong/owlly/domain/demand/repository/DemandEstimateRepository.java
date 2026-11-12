@@ -45,4 +45,24 @@ public interface DemandEstimateRepository extends JpaRepository<DemandEstimate, 
     /** 한 산출에서 특정 거점→목적지의 모든 수요 셀(요일·슬롯별). API-45 기여 판정에 쓴다. */
     List<DemandEstimate> findByRunIdAndPickupPointIdAndDestinationDongId(
             Long runId, Long pickupPointId, Long destinationDongId);
+
+    /**
+     * 리포트 상단 집계(API-46 생성 시 박제). 리포트 필터와 같은 조건으로 표시 가능한 셀 전체를 합산한다.
+     * 반환: [journeyCount, failedJourneyCount, soloSelectedCount, busSelectedCount] 한 행.
+     */
+    @Query(value = """
+            SELECT coalesce(sum(e.journey_count), 0),
+                   coalesce(sum(e.failed_journey_count), 0),
+                   coalesce(sum(e.solo_selected_count), 0),
+                   coalesce(sum(e.bus_selected_count), 0)
+            FROM demand_estimates e
+            WHERE e.run_id = :runId
+              AND e.is_suppressed = false
+              AND (:weekday IS NULL OR e.weekday = :weekday)
+              AND (CAST(:slotStart AS time) IS NULL OR e.slot_start = CAST(:slotStart AS time))
+            """, nativeQuery = true)
+    List<Object[]> summarize(
+            @Param("runId") Long runId,
+            @Param("weekday") Integer weekday,
+            @Param("slotStart") LocalTime slotStart);
 }
