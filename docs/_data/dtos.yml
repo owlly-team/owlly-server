@@ -350,8 +350,12 @@ DemandCandidate:
       "universityId": "string",
       "pickupPointId": "string",
       "pickupPointName": "string",
+      "pickupLatitude": "number | null (거점 위도)",
+      "pickupLongitude": "number | null (거점 경도)",
       "destinationDongId": "string",
       "destinationDongName": "string",
+      "destinationLatitude": "number | null (동 대표 위도)",
+      "destinationLongitude": "number | null (동 대표 경도)",
       "weekday": "integer (0=일요일, 0~6)",
       "slotStart": "string (HH:mm)",
       "journeyCount": "integer",
@@ -397,7 +401,18 @@ StakeholderReport:
       "format": "PDF | IMAGE",
       "status": "DRAFT | GENERATING | READY | FAILED",
       "filters": "ReportFilters",
+      "summary": "{ journeyCount, failedJourneyCount, soloSelectedCount, busSelectedCount } | null (상단 집계 카드)",
       "items": "ReportItem[]",
+      "narrative": "string | null (하단 서술·제언)",
       "generatedAt": "datetime | null",
       "downloadAvailable": "boolean"
+    }
+StakeholderReportCreate:
+  skeleton: |
+    {
+      "runId": "string (^[1-9][0-9]*$)",
+      "format": "PDF | IMAGE",
+      "filters": "ReportFilters (periodStart·periodEnd 필수)",
+      "items": "[ { \"estimateId\": \"string\", \"action\": \"SHUTTLE_EXTENSION | CITY_PROPOSAL\" } ] (1~10개, 중복 금지)",
+      "narrative": "string | 생략 (하단 서술·제언, 최대 2000자)"
     }

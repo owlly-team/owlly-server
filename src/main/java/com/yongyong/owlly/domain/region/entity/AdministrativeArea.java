@@ -9,6 +9,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -41,4 +42,12 @@ public class AdministrativeArea extends BaseTimeEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private AreaLevel level;
+
+    /** 대표(중심) 위도. 수요 지도에 동을 한 점으로 찍을 때 쓴다. 미설정이면 NULL. */
+    @Column(precision = 10, scale = 7)
+    private BigDecimal latitude;
+
+    /** 대표(중심) 경도. 수요 지도에 동을 한 점으로 찍을 때 쓴다. 미설정이면 NULL. */
+    @Column(precision = 10, scale = 7)
+    private BigDecimal longitude;
 }

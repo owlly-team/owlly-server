@@ -44,6 +44,15 @@ public class StakeholderReport extends BaseTimeEntity {
     @Column(name = "filters_snapshot", nullable = false, columnDefinition = "jsonb")
     private String filtersSnapshot;
 
+    /** 생성 시점 상단 집계(귀가·매칭실패·혼자택시·막차 합계) 박제. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "summary_snapshot", columnDefinition = "jsonb")
+    private String summarySnapshot;
+
+    /** 리포트 하단 서술(요약·제언). 작성자가 직접 넣는다. 없으면 NULL. */
+    @Column(name = "narrative", columnDefinition = "text")
+    private String narrative;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private ReportFormat format;

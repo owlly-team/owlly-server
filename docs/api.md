@@ -988,9 +988,9 @@
 
 **요청 본문:** 없음
 
-**처리·검증:** 학생/관계자 모두 최소 표본 기준을 통과한 셀만 반환. 동일 runId로 페이지와 필터를 고정. 기본 정렬은 원본의 추정 수요 내림차순, 동률 ID 오름차순. 초기 권한 제안은 자기 대학 범위. v0.2 복합 점수는 사용하지 않음. 기간 필터는 이미 성공적으로 산출된 run과 일치해야 한다. 원하는 기간의 산출이 없으면 최신 데이터로 몰래 대체하지 않는다. 요약 지표도 표시 가능한 셀만 합산한다.
+**처리·검증:** 로그인 사용자면 조회 가능. 최소 표본 기준을 통과한 셀만 반환(표본 미달은 제외). 동일 runId로 페이지와 필터를 고정. 정렬은 후보 순위(candidateRank) 오름차순이며 후보가 아닌 셀은 뒤로, 동률은 id 오름차순. 지도 표시용으로 거점 좌표와 동 대표(중심) 좌표를 함께 내려 준다(개인 하차좌표가 아닌 익명화된 동 중심점; 동 좌표 미설정이면 null). v0.2 복합 점수는 사용하지 않는다. 기간 필터는 이미 성공적으로 산출된 run과 일치해야 하며, 원하는 기간의 산출이 없으면 최신 데이터로 대체하지 않는다. 다음 페이지는 meta.nextCursor로 잇는다.
 
-**업무 오류:** `409 DEMAND_NOT_READY`, `403 SCOPE_NOT_ALLOWED`, `503 POLICY_NOT_CONFIGURED`
+**업무 오류:** `409 DEMAND_NOT_READY`
 
 **ERD 연결:** `demand_runs`, `demand_estimates`, `universities`, `pickup_points`, `administrative_areas`
 
@@ -1628,8 +1628,12 @@
 | `universityId` | string | 예 | 대학; 형식: `^[1-9][0-9]*$` |
 | `pickupPointId` | string | 예 | 거점; 형식: `^[1-9][0-9]*$` |
 | `pickupPointName` | string | 예 | 거점명 |
+| `pickupLatitude` | number / null | 예 | 거점 위도 (지도 출발점) |
+| `pickupLongitude` | number / null | 예 | 거점 경도 (지도 출발점) |
 | `destinationDongId` | string | 예 | 하차 동; 형식: `^[1-9][0-9]*$` |
 | `destinationDongName` | string | 예 | 동명 |
+| `destinationLatitude` | number / null | 예 | 동 대표(중심) 위도 (지도 도착점); 개인 하차좌표가 아닌 익명화된 동 중심 |
+| `destinationLongitude` | number / null | 예 | 동 대표(중심) 경도 (지도 도착점); 미설정이면 null |
 | `weekday` | integer | 예 | 요일 0=일요일; 최소 0; 최대 6 |
 | `slotStart` | string | 예 | Asia/Seoul HH:mm; 형식: `^(?:[01][0-9]|2[0-3]):(?:00|30)$` |
 | `journeyCount` | integer | 예 | 중복 제거 귀가 건수; 최소 0 |
