@@ -692,7 +692,7 @@
 
 **방 수명:** 출발 +1시간과 대표의 정산 확정 시각(settlements.finalized_at) 중 늦은 시각에 종료합니다. 정산 생성 전 또는 미확정이면 종료를 연장하며, 실제 외부 송금 수령 확인까지 기다리는 규칙은 추가하지 않습니다. 팟 해산은 즉시 종료합니다. 종료 후 방·이력 조회는 410 ROOM_ACCESS_EXPIRED, 전송은 409 ROOM_CLOSED이며 완료한 전송의 재시도도 현재 접근 권한·수명을 검사합니다. 1분 주기 작업이 상태를 CLOSED로 기록하고 계좌를 삭제하며, 요청도 같은 시각 조건을 검사해 작업 주기 사이에 접근하지 못하게 합니다. 계좌 삭제 시 transfers.receiver_account_id만 NULL로 바꾸고 금액·송수신 확인 이력은 보존합니다. 정산 확정 기능과의 실제 연결 검증은 해당 담당 작업과 함께 확인해야 합니다.
 
-**보존 구분:** 방 접근 종료와 채팅 기록의 물리 삭제는 다릅니다. 신고 API-30과 7일 보존의 기산점·범위가 연결되기 전에는 메시지를 임의 삭제하지 않으며 deleteAfter는 null입니다. 방 생성·개인정보 주의·집결 10분 전·멤버 이탈·택시 호출 안내는 서버 전용 SYSTEM 메시지로 중복 없이 기록합니다. 집결 안내는 출발 10분 전부터 출발 전까지 1분 주기로 생성하며, 시스템 메시지는 수정·삭제 API를 제공하지 않습니다.
+**보존 구분:** 방 접근 종료와 채팅 기록의 물리 삭제는 다릅니다. 기획 질문 v3에 따라 API-30은 신고 시점까지 방 전체 대화의 증거 사본을 별도 보관하고 신고 접수부터 7일 뒤 사본·설명을 정리합니다. 이 정리는 이용 중인 채팅방의 메시지를 삭제하지 않습니다. 일반 대화의 물리 삭제 기준은 별도이며 Room.deleteAfter는 null입니다. 방 생성·개인정보 주의·집결 10분 전·멤버 이탈·택시 호출 안내는 서버 전용 SYSTEM 메시지로 중복 없이 기록합니다. 집결 안내는 출발 10분 전부터 출발 전까지 1분 주기로 생성하며, 시스템 메시지는 수정·삭제 API를 제공하지 않습니다.
 
 **업무 오류:** `409 ROOM_NOT_READY`, `410 ROOM_ACCESS_EXPIRED`
 
@@ -751,7 +751,7 @@
 
 **권한:** 해당 방 접근권한을 가진 참여자 (`ROOM_MEMBER`) · **성공:** 201 · 응답 `data: SafetyReport`
 
-경로 `roomId` 필수 · `Idempotency-Key` 필수
+경로 `roomId`는 양의 bigint · 로그인 세션 쿠키, UUID `Idempotency-Key`, `X-CSRF-Token` 필수 · operationId: `reportMember`
 
 **요청 본문:** `ReportCreate` · application/json
 
@@ -764,9 +764,32 @@
 }
 ```
 
-**처리·검증:** 본인 외 같은 팟 참여자만 대상. messageId를 보냈다면 같은 방·대상 작성 메시지인지 검증. 신고와 정규화된 사용자 쌍 차단을 원자적으로 생성. details/증거는 마스킹 후 암호화. 신고 횟수 제재는 자동 적용하지 않음.
+**성공 응답 예시:**
 
-**업무 오류:** `422 INVALID_REPORT_TARGET`, `503 POLICY_NOT_CONFIGURED`
+```json
+{
+  "data": {
+    "id": "801",
+    "status": "RECEIVED",
+    "evidenceDeleteAfter": "2026-11-12T23:21:00+09:00",
+    "rematchingBlocked": true
+  }
+}
+```
+
+**접근·대상 검증:** 현재 채팅방에 입장 가능한 ACCEPTED 학생만 신고합니다. 팟 외 사용자는 404, 미확정·이탈 멤버는 403, 대표 계좌 미등록은 409 ROOM_NOT_READY, 종료된 방은 409 ROOM_CLOSED입니다. 본인을 제외한 같은 팟의 멤버만 대상이며 대상이 이미 이탈했어도 같은 팟 소속이면 신고할 수 있습니다. messageId는 선택 사항이며, 전달하면 같은 방에서 대상이 작성한 USER 메시지여야 합니다. 본인·없는 멤버·타 팟 멤버·타 방/다른 작성자/SYSTEM/없는 메시지는 422 INVALID_REPORT_TARGET입니다. 노쇼·확인 코드 불일치는 사용자가 고르는 사유이며 자동 판정하지 않습니다.
+
+**입력·저장:** ID는 양의 bigint 범위 JSON 문자열, 사유는 정의된 5개 코드 중 하나입니다. details는 선택 JSON 문자열이며 v0.4 기준 최대 200자(Java 문자열 길이)입니다. OTHER에도 설명을 필수로 요구하지 않습니다. 알 수 없는 필드와 문자열 아닌 값은 422 VALIDATION_ERROR입니다. 신고 접수 시점까지의 해당 방 전체 대화(USER·SYSTEM)와 선택 설명을 기존 번호·링크·계좌 마스킹 후 암호화해 사본으로 저장합니다. 이후 대화는 이 사본에 추가하지 않습니다. 캡처 첨부·파일 업로드와 운영자 신고 검토 API는 이번 범위에 없습니다. 응답은 기존 SafetyReport 필드를 유지하고 Cache-Control: no-store를 적용하며 설명·증거 원문을 반환하지 않습니다.
+
+**중복·재시도:** 기획 질문 v3 기준 같은 방에서 동일 신고자가 동일 대상을 한 번만 신고합니다. 새 키로 사유·메시지·설명을 바꿔 다시 신고해도 409 REPORT_ALREADY_EXISTS입니다. 다른 방의 신고와 상대방의 역방향 신고는 별개입니다. 동일 키·동일 사용자·방·대상·사유·messageId·설명 원문은 기존 신고 ID·만료 시각을 201로 반환하고 사본을 다시 만들거나 만료를 연장하지 않습니다. 같은 키에 다른 입력은 409 IDEMPOTENCY_CONFLICT이며, 마스킹 결과가 같아도 원문이 다르면 충돌합니다. 키는 UUID 대소문자를 정규화합니다. 재시도도 현재 접근 권한과 방 수명을 검사합니다.
+
+**재매칭 차단:** 신고·증거·멱등 기록·정규화한 사용자 쌍 차단을 하나의 트랜잭션으로 저장합니다. 사용자 ID의 작은 값/큰 값 순서로 user_blocks에 기록하고 기존 관계는 유지합니다. 기존 매칭과 슬롯 대기 인원 조회의 차단 필터를 재사용합니다. 신고 후 현재 팟을 해산하거나 대화를 차단하지 않으며, 신고 횟수에 따른 자동 제외·노쇼 기록·이용 정지는 적용하지 않습니다.
+
+**보존·정리:** 각 신고의 접수 시각부터 정확히 7일을 evidenceDeleteAfter로 반환합니다. 다른 신고와 별도로 계산하고 연장하지 않습니다. 1분 주기 정리 작업이 만료 시각 이하인 신고의 암호화 사본(설명 포함)과 messageId 참조를 NULL로 지웁니다. 원래 채팅 메시지와 다른 미만료 신고 증거는 유지합니다. 신고 ID·방·당사자·사유·상태 등 접수 메타데이터와 멱등 HMAC은 중복 방지·재시도를 위해 유지하며, 사본 삭제 후에도 재매칭 차단을 유지합니다. 증거를 조회하는 사용자 API는 제공하지 않습니다.
+
+**DB·설정:** safety_reports의 (room_id,reporter_member_id,target_member_id) UNIQUE와 evidence_delete_after 인덱스, safety_report_receipts(request_key PK, request_hash HMAC, report_id)가 추가됩니다. 기존 암호화 키와 VERIFICATION_SECRET(32바이트 이상)을 재사용하며 새 필수 환경변수는 없습니다.
+
+**업무 오류:** `401 UNAUTHENTICATED`, `403 FORBIDDEN`, `403 ACCOUNT_SUSPENDED`, `404 RESOURCE_NOT_FOUND`, `409 ROOM_NOT_READY`, `409 ROOM_CLOSED`, `409 REPORT_ALREADY_EXISTS`, `409 IDEMPOTENCY_CONFLICT`, `422 VALIDATION_ERROR`, `422 INVALID_REPORT_TARGET`, `503 POLICY_NOT_CONFIGURED` 및 공통 오류
 
 **ERD 연결:** `safety_reports`, `user_blocks`, `chat_messages`, `party_members`
 
@@ -1465,7 +1488,7 @@
 | `targetMemberId` | string | 예 | 신고 대상 참여자; 형식: `^[1-9][0-9]*$` |
 | `reasonCode` | string | 예 | 사유; ABUSIVE_LANGUAGE / PRIVACY_REQUEST / NO_SHOW / IDENTITY_MISMATCH / OTHER |
 | `messageId` | string | 아니오 | 메시지 신고일 때; 형식: `^[1-9][0-9]*$` |
-| `details` | string | 아니오 | 선택적 설명; 마스킹 후 암호화 증거에 포함; 최대 1000자 |
+| `details` | string | 아니오 | 선택적 설명(OTHER도 선택); 마스킹 후 암호화 증거에 포함; 최대 200자(Java 문자열 길이) |
 
 ### SafetyReport
 
@@ -1473,7 +1496,7 @@
 | --- | --- | --- | --- |
 | `id` | string | 예 | 신고 ID; 형식: `^[1-9][0-9]*$` |
 | `status` | string | 예 | 신고 상태; RECEIVED / REVIEWED / DISMISSED |
-| `evidenceDeleteAfter` | string (date-time) | 예 | 확정 정책으로 산정한 삭제 예정 |
+| `evidenceDeleteAfter` | string (date-time) | 예 | 신고 접수 시각 +7일. 재시도·다른 신고로 연장하지 않음 |
 | `rematchingBlocked` | boolean | 예 | 양쪽 재매칭 차단 적용 |
 
 ### AccountInput
@@ -2052,6 +2075,7 @@
 | 409 | `PREPAY_NOT_COMPLETED` | 유효 멤버의 선송금 수령 확인 미완료 |
 | 409 | `REPORT_CONTENT_UNAVAILABLE` | 출력 시점에 사용할 수 없는 후보 |
 | 409 | `REPORT_NOT_READY` | 출력 파일이 준비되지 않음 |
+| 409 | `REPORT_ALREADY_EXISTS` | 같은 방에서 동일 신고자가 이미 신고한 대상 |
 | 409 | `REPRESENTATIVE_CHANGE_REQUIRES_POLICY` | 대표 교체와 기수령금 처리 정책 필요 |
 | 409 | `REQUEST_ALREADY_MATCHED` | 이미 팟에 배정된 신청 |
 | 409 | `ROOM_CLOSED` | 닫힌 방에 쓰기 불가 |
@@ -2104,7 +2128,7 @@
 | 출발 +5분 미입금 제외 | 원본 규칙 유지. 제외 후 1명만 남거나 이미 보낸 돈이 있는 경우 재분담·환급 방식 확정 필요 |
 | 미탑승·음수 환급 | 자동 전액 환급·추가 송금·다수결 정책을 만들지 않음. PREVIEW는 확정 불가 사유, FINALIZE는 검토 상태로 분기 |
 | 수동 송금 확인 순서 | 수취자가 송금자보다 먼저 입금을 확인하는 경우 허용 제안. 실제 은행 검증과 구분 |
-| 채팅·계좌·영수증 삭제 | v0.4 기준 max(출발+1시간, 대표 정산 확정) 종료 및 계좌 삭제. 정산 미확정이면 연장. 신고 7일 기산점·복수 신고·일반 메시지 물리 삭제·영수증 보관 기간은 별도 확정·연결 필요 |
+| 채팅·계좌·영수증 삭제 | v0.4 기준 max(출발+1시간, 대표 정산 확정) 종료 및 계좌 삭제. 정산 미확정이면 연장. 신고 증거는 기획 질문 v3 기준 신고 시점까지의 방 전체 대화 사본을 신고별 접수 +7일에 정리하고 차단 유지. 일반 메시지 물리 삭제·영수증 보관 기간은 별도 정책 |
 | 계좌 재사용 | 장기 서버 보관 API 없음. ‘다음에도 사용’의 기기 보관·동의 범위 확정 필요 |
 | 미정산 제한·제재 | 신규 등록 제한 대상/기간, 7일 지연 정지의 기산점·해제 조건 확정 필요 |
 | 최소 표본·AI 순위 | ‘등록 5건’의 정확한 단위 확인 필요. 현재 임시 제안은 중복 제거 귀가 기준. 원본의 추정 수요 순위를 사용하고 복합 점수는 보류 |
