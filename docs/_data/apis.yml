@@ -351,7 +351,7 @@ sections:
           첫 개인 확정 시 방 생성, 전원 확정을 기다리지 않음
           대표 계좌 등록용 roomId는 API-22/23 응답 사용
           출발 +1시간과 대표 정산 확정 중 늦은 시각에 종료, 정산 미확정이면 연장
-          종료 후 조회 불가. deleteAfter=null (신고 보존·물리 삭제는 별도 연결)
+          종료 후 조회 불가. deleteAfter=null (신고 사본은 API-30에서 별도 7일 보존·정리)
         errors: ["401 UNAUTHENTICATED", "403 FORBIDDEN", "403 ACCOUNT_SUSPENDED", "404 RESOURCE_NOT_FOUND", "409 ROOM_NOT_READY", "410 ROOM_ACCESS_EXPIRED"]
       - id: API-28
         method: GET
@@ -402,8 +402,8 @@ sections:
         method: POST
         path: /rooms/{id}/reports
         desc: 멤버·메시지 신고
-        status: 시작 전
-        auth: 해당 방 참여자 (ROOM_MEMBER) · Idempotency-Key 필수
+        status: 완료
+        auth: 확정된 방 참여자 (ROOM_MEMBER) · 대표는 계좌 등록 후 · UUID Idempotency-Key와 X-CSRF-Token 필수
         success: "201 · data = SafetyReport"
         req: |
           application/json · ReportCreate
@@ -413,7 +413,21 @@ sections:
             "messageId": "702",
             "details": "개인 연락처를 요구했어요."
           }
-        errors: ["422 INVALID_REPORT_TARGET", "503 POLICY_NOT_CONFIGURED"]
+          details: 선택 JSON 문자열, 최대 200자(Java 문자열 길이). OTHER도 선택
+          같은 방·같은 신고자·같은 대상은 1회. 다른 방·역방향 신고는 별개
+          동일 키·원문 재시도는 기존 결과 반환. 변경 요청은 충돌
+          신고 시점까지 전체 대화 사본·설명을 마스킹·암호화해 신고별 접수 +7일에 정리
+          사본 삭제 후에도 재매칭 차단·중복 방지 기록 유지. 자동 제재·캡처 업로드 없음
+        res: |
+          {
+            "data": {
+              "id": "801",
+              "status": "RECEIVED",
+              "evidenceDeleteAfter": "2026-11-12T23:21:00+09:00",
+              "rematchingBlocked": true
+            }
+          }
+        errors: ["401 UNAUTHENTICATED", "403 FORBIDDEN", "403 ACCOUNT_SUSPENDED", "404 RESOURCE_NOT_FOUND", "409 ROOM_NOT_READY", "409 ROOM_CLOSED", "409 REPORT_ALREADY_EXISTS", "409 IDEMPOTENCY_CONFLICT", "422 VALIDATION_ERROR", "422 INVALID_REPORT_TARGET", "503 POLICY_NOT_CONFIGURED"]
 
   - name: 계좌·정산
     owner: 안시현
