@@ -3,7 +3,6 @@ package com.yongyong.owlly.domain.auth;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -95,7 +94,10 @@ class StaffLoginIntegrationTest {
         assertThat(cookie.getSecure()).isTrue();
         mvc.perform(get("/api/v1/auth/session").cookie(cookie)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.user.role").value("STAFF"));
-        mvc.perform(get("/api/v1/demand/candidates").cookie(cookie)).andExpect(status().isNotFound()); // 경로 자체는 후속 구현
+        // API-43 은 로그인 사용자면 누구나 접근(STAFF 포함). 산출(run) 유무에 따라 200 또는 409 라서
+        // 여기선 접근 제어만 검증한다: 인증·구현됐으면 401/403/404 가 아니다.
+        mvc.perform(get("/api/v1/demand/candidates").cookie(cookie))
+                .andExpect(demand -> assertThat(demand.getResponse().getStatus()).isNotIn(401, 403, 404));
         mvc.perform(delete("/api/v1/auth/session").cookie(cookie).header("X-CSRF-Token", csrf(result))
                         .header("Idempotency-Key", key())).andExpect(status().isNoContent())
                 .andExpect(cookie().maxAge("owlly_session", 0));
@@ -360,7 +362,6 @@ class StaffLoginIntegrationTest {
         mvc.perform(post("/api/v1/journeys").cookie(cookie).header("X-CSRF-Token", csrf(loggedIn))
                         .header("Idempotency-Key", key()).contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isForbidden());
-        mvc.perform(get("/api/v1/demand/candidates").with(user("student-test").roles("STUDENT"))).andExpect(status().isForbidden());
     }
 
     /** 실제 정리 SQL을 별도 연결에서 실행하되 롤백해 기존 로컬 데이터에는 영향을 주지 않는다. */
