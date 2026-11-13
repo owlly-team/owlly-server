@@ -29,4 +29,7 @@ public interface PickupPointRepository extends JpaRepository<PickupPoint, Long> 
             order by p.id asc
             """)
     List<PickupPoint> findActiveByUniversityIdOrCommon(@Param("universityId") Long universityId);
+
+    /** 같은 학교에 같은 이름의 거점이 이미 있는지(활성 여부와 관계없이). 거점 시드가 중복 생성을 피할 때 쓴다. */
+    boolean existsByUniversityIdAndName(Long universityId, String name);
 }
