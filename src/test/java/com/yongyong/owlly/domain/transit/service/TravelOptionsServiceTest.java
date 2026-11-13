@@ -62,7 +62,7 @@ class TravelOptionsServiceTest {
     private final TransitTimetableService timetable = mock(TransitTimetableService.class);
     private final TravelOptionsService service = new TravelOptionsService(userRepository, profileRepository,
             pickupPointRepository, areaRepository, new OutOfCityDetector(areaRepository), dropoffLocations, taxiFareService, matchingSlotService,
-            new TransitPlanCatalog(PICKUP), timetable);
+            new TransitPlanCatalog("단국대 정문"), timetable);
 
     private static Instant kst(String dateTime) {
         return ZonedDateTime.parse(dateTime + "+09:00[Asia/Seoul]").toInstant();
@@ -72,7 +72,7 @@ class TravelOptionsServiceTest {
         when(userRepository.findById(ME)).thenReturn(Optional.of(User.builder().id(ME).universityId(UNIVERSITY).role(Role.STUDENT).build()));
         when(profileRepository.findById(ME)).thenReturn(Optional.of(
                 StudentProfile.builder().userId(ME).gender(Gender.FEMALE).sameGenderDefault(true).build()));
-        when(pickupPointRepository.findById(PICKUP)).thenReturn(Optional.of(PickupPoint.builder().id(PICKUP).universityId(UNIVERSITY).active(true).areaId(PICKUP_CITY)
+        when(pickupPointRepository.findById(PICKUP)).thenReturn(Optional.of(PickupPoint.builder().id(PICKUP).name("단국대 정문").universityId(UNIVERSITY).active(true).areaId(PICKUP_CITY)
                 .latitude(new BigDecimal("37.3219")).longitude(new BigDecimal("127.1265")).build()));
         when(dropoffLocations.resolveDong(anyDouble(), anyDouble())).thenReturn(
                 AdministrativeArea.builder().id(105L).parentId(21L).level(AreaLevel.DONG).name("영통3동").officialCode("4111758500").build());
@@ -251,7 +251,7 @@ class TravelOptionsServiceTest {
         assertThat(crossing.warnings()).contains("시·군을 넘어가서 시계 외 할증을 반영했어요");
 
         environment(TransitPlanCatalog.YEONGTONG_DISTRICT_CODE);
-        when(pickupPointRepository.findById(PICKUP)).thenReturn(Optional.of(PickupPoint.builder().id(PICKUP).universityId(UNIVERSITY).active(true)
+        when(pickupPointRepository.findById(PICKUP)).thenReturn(Optional.of(PickupPoint.builder().id(PICKUP).name("단국대 정문").universityId(UNIVERSITY).active(true)
                 .areaId(20L).latitude(new BigDecimal("37.3219")).longitude(new BigDecimal("127.1265")).build()));
         org.mockito.Mockito.clearInvocations(taxiFareService);
 
@@ -269,5 +269,16 @@ class TravelOptionsServiceTest {
         compare(NOW);
 
         org.mockito.Mockito.verify(taxiFareService).estimateRoute(any(), anyList(), any(), eq(false));
+    }
+
+    @Test
+    void 시연_구간이_아닌_이름의_거점은_번호가_같아도_막차_안내가_없다() {
+        environment(TransitPlanCatalog.YEONGTONG_DISTRICT_CODE);
+        when(pickupPointRepository.findById(PICKUP)).thenReturn(Optional.of(PickupPoint.builder().id(PICKUP).name("강남대 정문").universityId(UNIVERSITY).active(true)
+                .areaId(PICKUP_CITY).latitude(new BigDecimal("37.2731")).longitude(new BigDecimal("127.12902")).build()));
+
+        TransitOption transit = compare(NOW).transit();
+
+        assertThat(transit.available()).isFalse();
     }
 }
