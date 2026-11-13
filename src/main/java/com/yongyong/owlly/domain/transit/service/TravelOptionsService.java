@@ -101,7 +101,7 @@ public class TravelOptionsService {
         List<String> warnings = new ArrayList<>();
 
         TransitOption transit = transitOption(
-                transitPlanCatalog.find(pickupPoint.getId(), district.getOfficialCode()),
+                transitPlanCatalog.find(pickupPoint.getName(), district.getOfficialCode()),
                 walkingStart, dropoff, request.departureAt(), now, warnings);
 
         boolean outOfCity = outOfCityDetector.isOutOfCity(pickupPoint.getAreaId(), List.of(district.getId()));
