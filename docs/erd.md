@@ -172,8 +172,10 @@ erDiagram
 | `official_code` | varchar | UK | 아니오 | 공식 코드 |
 | `name` | varchar | — | 아니오 | 지역명 |
 | `level` | enum | — | 아니오 | CITY / DISTRICT / DONG |
+| `latitude` | decimal | — | 예 | 대표(중심) 위도. 수요 지도에 동을 한 점으로 찍을 때 사용 |
+| `longitude` | decimal | — | 예 | 대표(중심) 경도. 미설정이면 NULL |
 
-**제약·처리:** 매칭 권역은 구, 구가 없는 도시는 시. 요청의 district_id에는 해당 CITY 또는 DISTRICT를 참조한다. 집계 단위는 행정동이며 주소 원문은 집계에 전달하지 않는다.
+**제약·처리:** 매칭 권역은 구, 구가 없는 도시는 시. 요청의 district_id에는 해당 CITY 또는 DISTRICT를 참조한다. 집계 단위는 행정동이며 주소 원문은 집계에 전달하지 않는다. 수요 지도의 동 좌표는 개인 하차좌표가 아닌 익명화된 동 대표(중심)점을 쓴다.
 
 ### pickup_points — 고정 출발·집결 거점
 

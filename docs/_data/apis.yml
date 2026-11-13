@@ -629,7 +629,7 @@ sections:
         method: GET
         path: /demand/candidates
         desc: 수요 지도·노선 후보 목록
-        status: 시작 전
+        status: 완료
         auth: 로그인 사용자 (AUTHENTICATED)
         success: "200 · data = DemandCandidate[]"
         req: |
@@ -642,20 +642,22 @@ sections:
               {
                 "id": "1501", "runId": "1401", "universityId": "1",
                 "pickupPointId": "11", "pickupPointName": "학교 정문 거점",
+                "pickupLatitude": 37.241234, "pickupLongitude": 127.08088,
                 "destinationDongId": "31", "destinationDongName": "예시동",
+                "destinationLatitude": 37.5035, "destinationLongitude": 126.9966,
                 "weekday": 4, "slotStart": "23:30",
                 "journeyCount": 12, "failedJourneyCount": 4, "pooledJourneyCount": 6,
                 "estimatedWeeklyDemand": 40, "candidateRank": 2, "candidateThreshold": 30
               }
             ],
-            "meta": { "runId": "1401", "modelVersion": "proposal-v1", "hasMore": false }
+            "meta": { "runId": "1401", "modelVersion": "proposal-v1", "hasMore": false, "nextCursor": null }
           }
-        errors: ["409 DEMAND_NOT_READY", "403 SCOPE_NOT_ALLOWED", "503 POLICY_NOT_CONFIGURED"]
+        errors: ["409 DEMAND_NOT_READY"]
       - id: API-44
         method: GET
         path: /demand/candidates/{id}
         desc: 노선 구간·근거 지표 상세
-        status: 시작 전
+        status: 완료
         auth: 로그인 사용자 (AUTHENTICATED)
         success: "200 · data = DemandCandidate"
         req: 없음
@@ -664,7 +666,7 @@ sections:
         method: GET
         path: /me/demand-contribution
         desc: 내 귀가 반영 횟수·후보 여부
-        status: 시작 전
+        status: 완료
         auth: 학생 (STUDENT)
         success: "200 · data = Contribution"
         req: |
@@ -679,7 +681,7 @@ sections:
         method: POST
         path: /staff/reports
         desc: 후보·조치로 리포트 초안 생성
-        status: 시작 전
+        status: 완료
         auth: 학교 관계자 (STAFF) · Idempotency-Key 필수
         success: "201 · data = StakeholderReport"
         req: |
@@ -695,7 +697,7 @@ sections:
         method: GET
         path: /staff/reports
         desc: 내 리포트 목록
-        status: 시작 전
+        status: 완료
         auth: 학교 관계자 (STAFF)
         success: "200 · data = StakeholderReport[]"
         req: |
@@ -706,7 +708,7 @@ sections:
         method: GET
         path: /staff/reports/{id}
         desc: 리포트 미리보기·생성 상태 조회
-        status: 시작 전
+        status: 완료
         auth: 리포트를 만든 관계자 (REPORT_OWNER) · ETag
         success: "200 · data = StakeholderReport"
         req: 없음

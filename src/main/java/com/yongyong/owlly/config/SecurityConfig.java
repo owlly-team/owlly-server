@@ -153,7 +153,8 @@ public class SecurityConfig {
                                 "/api/v1/travel-options", "/api/v1/journeys/**", "/api/v1/matching-slots",
                                 "/api/v1/ride-requests/**", "/api/v1/parties/**", "/api/v1/rooms/**",
                                 "/api/v1/transfers/**").hasRole("STUDENT")
-                        .requestMatchers("/api/v1/staff/**", "/api/v1/demand/**").hasRole("STAFF")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/demand/**").authenticated()
+                        .requestMatchers("/api/v1/staff/**").hasRole("STAFF")
                         .anyRequest().authenticated());
         return http.build();
     }

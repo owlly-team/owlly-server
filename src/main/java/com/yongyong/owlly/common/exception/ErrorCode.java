@@ -84,7 +84,16 @@ public enum ErrorCode {
     SETTLEMENT_FINALIZED(HttpStatus.CONFLICT, "이미 확정된 정산은 바꿀 수 없습니다."),
     PREPAY_NOT_COMPLETED(HttpStatus.CONFLICT, "아직 수령 확인이 끝나지 않은 선송금이 있어요."),
     INVALID_STOP_ORDER(HttpStatus.UNPROCESSABLE_ENTITY, "하차 순서는 현재 멤버 전원을 한 번씩 담아야 합니다."),
-    REPRESENTATIVE_CHANGE_REQUIRES_POLICY(HttpStatus.CONFLICT, "마지막 하차자(대표) 변경은 정책 확정 전까지 할 수 없습니다.");
+    REPRESENTATIVE_CHANGE_REQUIRES_POLICY(HttpStatus.CONFLICT, "마지막 하차자(대표) 변경은 정책 확정 전까지 할 수 없습니다."),
+
+    // ===== 수요 지도·노선 후보 (demand) =====
+    DEMAND_NOT_READY(HttpStatus.CONFLICT, "아직 수요 산출이 준비되지 않았습니다."),
+
+    // ===== 관계자 리포트 (report) =====
+    MIXED_DEMAND_RUN(HttpStatus.UNPROCESSABLE_ENTITY, "한 리포트에 서로 다른 산출의 후보를 섞을 수 없습니다."),
+    SUPPRESSED_CANDIDATE(HttpStatus.UNPROCESSABLE_ENTITY, "표본이 부족해 공개할 수 없는 후보입니다."),
+    REPORT_FILTER_MISMATCH(HttpStatus.UNPROCESSABLE_ENTITY, "선택한 후보가 리포트 필터(기간·요일·시간대)와 맞지 않습니다."),
+    REPORT_LAYOUT_LIMIT(HttpStatus.UNPROCESSABLE_ENTITY, "한 리포트에 담을 수 있는 후보 수를 넘었습니다.");
 
     private final HttpStatus status;
     private final String message;
