@@ -60,7 +60,7 @@ public class DemandController {
     public ApiResponse<DemandCandidate> getCandidate(
             @AuthenticationPrincipal SessionPrincipal principal,
             @PathVariable @Positive Long id) {
-        return ApiResponse.of(demandQueryService.getCandidate(id));
+        return ApiResponse.of(demandQueryService.getCandidate(principal.userId(), id));
     }
 
     /** API-45 내 귀가가 이 노선(거점→목적지) 수요에 반영된 횟수·후보 여부. 학생 본인만. */

@@ -1639,11 +1639,13 @@
 | `journeyCount` | integer | 예 | 중복 제거 귀가 건수; 최소 0 |
 | `failedJourneyCount` | integer | 예 | 실패 경험 귀가; 최종 수단과 겹침; 최소 0 |
 | `pooledJourneyCount` | integer | 예 | 탑승 확인; 최소 0 |
+| `pooledRegisteredCount` | integer / null | 예 | 동승 등록 건수(동승 신청 수). 매칭 실패율의 분모(실패율 = failedJourneyCount / pooledRegisteredCount). AI 산출이 함께 채움; 과거 산출엔 없을 수 있어 null |
 | `busSelectedCount` | integer | 예 | 막차 선택; 최소 0 |
 | `soloSelectedCount` | integer | 예 | 혼자 택시 선택; 최소 0 |
 | `estimatedWeeklyDemand` | number / null | 예 | 주간 추정치 |
 | `candidateRank` | integer / null | 예 | 추정 수요 순위 |
 | `candidateThreshold` | number / null | 예 | 확정된 후보 임계치 |
+| `existingSupply` | string / null | 예 | 기존 공급(이미 다니는 심야 노선). 예 "N1 하루 1회"·"1101N 평일 2회"·"없음". 고정 입력이라 AI 산출이 함께 채움; 리포트 "기존 공급" 열 재료; 미설정이면 null |
 | `evidence` | Evidence[] | 예 | 비식별 근거 |
 
 ### Contribution
@@ -2000,11 +2002,13 @@
       "journeyCount": 12,
       "failedJourneyCount": 4,
       "pooledJourneyCount": 6,
+      "pooledRegisteredCount": 11,
       "busSelectedCount": 4,
       "soloSelectedCount": 2,
       "estimatedWeeklyDemand": 40,
       "candidateRank": 2,
       "candidateThreshold": 30,
+      "existingSupply": "N1 하루 1회",
       "evidence": [
         {
           "sourceLabel": "서비스 귀가 집계",

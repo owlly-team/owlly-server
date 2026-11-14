@@ -31,11 +31,13 @@ public record DemandCandidate(
         int journeyCount,
         int failedJourneyCount,
         int pooledJourneyCount,
+        Integer pooledRegisteredCount,
         int busSelectedCount,
         int soloSelectedCount,
         BigDecimal estimatedWeeklyDemand,
         Integer candidateRank,
         BigDecimal candidateThreshold,
+        String existingSupply,
         List<Evidence> evidence) {
 
     private static final java.time.format.DateTimeFormatter HHMM =
@@ -61,11 +63,13 @@ public record DemandCandidate(
                 e.getJourneyCount(),
                 e.getFailedJourneyCount(),
                 e.getPooledJourneyCount(),
+                e.getPooledRegisteredCount(),
                 e.getBusSelectedCount(),
                 e.getSoloSelectedCount(),
                 e.getEstimatedWeeklyDemand(),
                 e.getCandidateRank(),
                 e.getCandidateThreshold(),
+                e.getExistingSupply(),
                 evidence);
     }
 
