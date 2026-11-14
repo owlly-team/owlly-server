@@ -35,7 +35,10 @@ public class ReportController {
 
     private final ReportService reportService;
 
-    /** API-46 후보·조치로 리포트 초안 생성. 같은 Idempotency-Key 재요청은 중복 생성을 막는다. */
+    /**
+     * API-46 후보·조치로 리포트 초안 생성. Idempotency-Key 는 UUID 형식만 검증한다
+     * (명세는 키 필수만 요구하며, 리포트 초안은 멱등 저장소 없이 형식만 확인한다 — {@link IdempotencyKey} 참고).
+     */
     @PostMapping
     public ResponseEntity<ApiResponse<StakeholderReportResponse>> create(
             @AuthenticationPrincipal SessionPrincipal principal,

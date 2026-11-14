@@ -73,6 +73,13 @@ public class DemandEstimate extends BaseTimeEntity {
     @Column(name = "pooled_journey_count", nullable = false)
     private int pooledJourneyCount;
 
+    /**
+     * 동승 등록 건수(동승을 신청한 수). 매칭 실패율의 분모다(실패율 = failed_journey_count / pooled_registered_count).
+     * AI 산출이 함께 채운다. 과거 산출엔 없을 수 있어 NULL 허용.
+     */
+    @Column(name = "pooled_registered_count")
+    private Integer pooledRegisteredCount;
+
     @Column(name = "bus_selected_count", nullable = false)
     private int busSelectedCount;
 
@@ -90,6 +97,13 @@ public class DemandEstimate extends BaseTimeEntity {
     /** 추정 수요 순 후보 순위. 후보 아니면 NULL. */
     @Column(name = "candidate_rank")
     private Integer candidateRank;
+
+    /**
+     * 기존 공급(이미 다니는 심야 노선). 예: "N1 하루 1회", "1101N 평일 2회", "없음".
+     * 고정 입력이라 AI 산출이 함께 채우고, 리포트 표의 "기존 공급" 열에 그대로 쓴다. 미설정이면 NULL.
+     */
+    @Column(name = "existing_supply", columnDefinition = "text")
+    private String existingSupply;
 
     /** 공급 격차·근거와 출처/관측시각/단위. */
     @JdbcTypeCode(SqlTypes.JSON)
