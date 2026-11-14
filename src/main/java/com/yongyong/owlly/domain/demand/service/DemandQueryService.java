@@ -9,6 +9,7 @@ import com.yongyong.owlly.domain.demand.entity.DemandRun;
 import com.yongyong.owlly.domain.demand.entity.DemandRunStatus;
 import com.yongyong.owlly.domain.demand.repository.DemandEstimateRepository;
 import com.yongyong.owlly.domain.demand.repository.DemandRunRepository;
+import com.yongyong.owlly.domain.user.repository.UserRepository;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -30,6 +31,7 @@ public class DemandQueryService {
     private final DemandRunRepository demandRuns;
     private final DemandEstimateRepository demandEstimates;
     private final DemandCandidateAssembler candidateAssembler;
+    private final UserRepository users;
 
     /** 목록 조회 조건. 모두 선택값(cursor/limit 제외). */
     public record Query(
@@ -67,10 +69,17 @@ public class DemandQueryService {
                 candidates, String.valueOf(run.getId()), run.getModelVersion(), hasMore, nextCursor);
     }
 
-    /** API-44 노선 후보 상세. 없거나 최소 표본 미달(숨김)이면 404(존재 여부를 노출하지 않는다). */
-    public DemandCandidate getCandidate(Long estimateId) {
+    /**
+     * API-44 노선 후보 상세. 없거나·최소 표본 미달(숨김)·다른 학교 셀이면 모두 동일한 404 로 응답한다
+     * (존재 여부와 소속 학교를 노출하지 않는다). 조회자의 소속 대학은 세션 사용자에서 가져온다.
+     */
+    public DemandCandidate getCandidate(Long viewerUserId, Long estimateId) {
+        Long viewerUniversityId = users.findById(viewerUserId)
+                .orElseThrow(() -> new OwllyException(ErrorCode.RESOURCE_NOT_FOUND))
+                .getUniversityId();
         DemandEstimate estimate = demandEstimates.findById(estimateId)
                 .filter(e -> !e.isSuppressed())
+                .filter(e -> e.getUniversityId().equals(viewerUniversityId))
                 .orElseThrow(() -> new OwllyException(ErrorCode.RESOURCE_NOT_FOUND));
         return candidateAssembler.assemble(List.of(estimate)).get(0);
     }
@@ -78,9 +87,15 @@ public class DemandQueryService {
     /** runId 지정 시 그 산출, 아니면 (기간이 오면 그 기간의) 최신 성공 산출. 없으면 409 DEMAND_NOT_READY. */
     private DemandRun resolveRun(Long runId, LocalDate periodStart, LocalDate periodEnd) {
         if (runId != null) {
-            return demandRuns.findById(runId)
+            DemandRun run = demandRuns.findById(runId)
                     .filter(r -> r.getStatus() == DemandRunStatus.SUCCEEDED)
                     .orElseThrow(() -> new OwllyException(ErrorCode.DEMAND_NOT_READY));
+            // runId 가 있으면 함께 온 기간과 일치해야 한다. 불일치면 그 기간의 산출이 아니므로 409.
+            if (periodStart != null && periodEnd != null
+                    && (!run.getPeriodStart().equals(periodStart) || !run.getPeriodEnd().equals(periodEnd))) {
+                throw new OwllyException(ErrorCode.DEMAND_NOT_READY);
+            }
+            return run;
         }
         if (periodStart != null && periodEnd != null) {
             return demandRuns
