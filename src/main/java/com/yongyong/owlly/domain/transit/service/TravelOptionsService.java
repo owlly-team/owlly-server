@@ -49,7 +49,9 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
+// 읽기 전용(readOnly)으로 두면 안 된다: 하차 핀이 처음 보는 동이면 행정구역 판별이 그 동을 새로 추가하는데,
+// 읽기 전용 트랜잭션 안에서는 INSERT 가 막혀 500 이 난다. (하차 핀 자체는 저장하지 않지만 행정구역은 추가될 수 있다.)
+@Transactional
 public class TravelOptionsService {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
