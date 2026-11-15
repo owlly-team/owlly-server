@@ -134,4 +134,8 @@ public interface RideRequestRepository extends JpaRepository<RideRequest, Long> 
                                               @Param("departureAt") Instant departureAt,
                                               @Param("now") Instant now,
                                               @Param("dueDepartureLimit") Instant dueDepartureLimit);
+
+    /** 수요 산출 집계 입력. 기간 [startInclusive, endExclusive) 의 모든 동승 신청(등록·실패 집계용). */
+    List<RideRequest> findByDepartureAtGreaterThanEqualAndDepartureAtLessThan(
+            Instant startInclusive, Instant endExclusive);
 }

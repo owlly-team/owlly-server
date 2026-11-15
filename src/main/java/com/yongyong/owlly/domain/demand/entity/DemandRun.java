@@ -53,4 +53,16 @@ public class DemandRun extends BaseTimeEntity {
 
     @Column(name = "completed_at")
     private Instant completedAt;
+
+    /** 산출이 끝나 조회에 쓸 수 있는 상태로 전이한다. */
+    public void markSucceeded(Instant at) {
+        this.status = DemandRunStatus.SUCCEEDED;
+        this.completedAt = at;
+    }
+
+    /** 산출이 실패해 조회에서 제외되는 상태로 전이한다. */
+    public void markFailed(Instant at) {
+        this.status = DemandRunStatus.FAILED;
+        this.completedAt = at;
+    }
 }

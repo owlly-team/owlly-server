@@ -42,3 +42,6 @@ out/
 
 ### Claude Code ###
 .claude/
+
+# 공공데이터 원본 CSV(용량 큼, 커밋 금지 — 추출값은 코드 스냅샷)
+/bus_usage.csv
