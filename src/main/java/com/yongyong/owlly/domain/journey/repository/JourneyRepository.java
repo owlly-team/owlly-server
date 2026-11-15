@@ -85,4 +85,8 @@ public interface JourneyRepository extends JpaRepository<Journey, Long> {
                              @Param("destinationDongId") Long destinationDongId,
                              @Param("startInclusive") Instant startInclusive,
                              @Param("endExclusive") Instant endExclusive);
+
+    /** 수요 산출 집계 입력. 기간 [startInclusive, endExclusive) 의 모든 귀가를 읽어 셀별로 센다. */
+    List<Journey> findByIntendedDepartureAtGreaterThanEqualAndIntendedDepartureAtLessThan(
+            Instant startInclusive, Instant endExclusive);
 }
